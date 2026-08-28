@@ -8,7 +8,10 @@ const API_URL = import.meta.env.VITE_API_URL;
 const ROWS_PER_PAGE = 10;
 
 const getExportToken = () => {
-  const existingToken = getToken() || localStorage.getItem("token") || "";
+  const superAdminToken = localStorage.getItem("token") || "";
+  if (superAdminToken.startsWith("super_admin_token_")) return superAdminToken;
+
+  const existingToken = getToken() || superAdminToken;
   if (existingToken) return existingToken;
 
   const nextToken = `super_admin_token_${Date.now()}`;
