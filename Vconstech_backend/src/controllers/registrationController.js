@@ -6,8 +6,8 @@ import { activatePricingInvitationRegistration } from '../services/subscriptionS
 import { sendEmail } from '../utils/mailer.js';
 import { validateRegistrationPayload } from '../utils/invitationValidation.js';
 
-const ERP_PORTAL_URL = 'https://erp.vconstech.in';
-const EMPLOYEE_LOGIN_URL = 'https://erp.vconstech.in/employee-login';
+const ERP_PORTAL_URL = 'https://erp.thevsoft.com';
+const EMPLOYEE_LOGIN_URL = 'https://erp.thevsoft.com/employee-login';
 
 const getLoginUrl = () => ERP_PORTAL_URL;
 

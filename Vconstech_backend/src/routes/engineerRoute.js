@@ -68,7 +68,7 @@ const isCustomerAccountInactive = (user) => {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const EMPLOYEE_LOGIN_URL = 'https://erp.vconstech.in/employee-login';
+const EMPLOYEE_LOGIN_URL = 'https://erp.thevsoft.com/employee-login';
 
 const getEmployeeLoginUrl = () => EMPLOYEE_LOGIN_URL;
 
