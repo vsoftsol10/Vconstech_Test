@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+
+/* Add this to your main CSS file or Tailwind configuration */
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* If using Tailwind, add this to your tailwind.config.js instead:
+
+module.exports = {
+  theme: {
+    extend: {
+      keyframes: {
+        'slide-in': {
+          '0%': { transform: 'translateX(100%)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        }
+      },
+      animation: {
+        'slide-in': 'slide-in 0.3s ease-out',
+      }
+    }
+  }
+}
+*/

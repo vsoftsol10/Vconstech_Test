@@ -1,0 +1,685 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String                 @id @default(uuid())
+  name                  String
+  email                 String                 @unique
+  password              String
+  mustChangePassword    Boolean                @default(false)
+  passwordExpiresAt     DateTime?
+  companyId             String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  role                  String
+  phoneNumber           String                 @default("")
+  city                  String                 @default("")
+  address               String                 @default("")
+  package               String?
+  customMembers         Int?
+  customProjectLimit    Int?
+  customPrice           Float?
+  customTemplateLimit   Int?
+  gstNumber             String                 @default("")
+  isActive              Boolean                @default(true)
+  accountStatus         String                 @default("ACTIVE")
+  clientId              Int?
+  crmCustomerId         String?
+  crmLeadId             String?
+  erpCustomerId         String?
+  subscriptionPlan      String?
+  subscriptionStartedAt DateTime?
+  subscriptionStatus    String?
+  trialEndDate          DateTime?
+  trialStartDate        DateTime?
+  selectedTemplateId    Int                    @default(1)
+  Bill                  Bill[]
+  uploadedFiles         File[]
+  projectAssignments    ProjectAssignment[]
+  client                Client?                @relation(fields: [clientId], references: [id])
+  company               Company?               @relation(fields: [companyId], references: [id])
+  crmInvitations        CrmInvitation[]
+  customerSubscriptions CustomerSubscription[]
+
+  @@index([clientId])
+  @@index([crmLeadId])
+  @@index([crmCustomerId])
+  @@index([subscriptionStatus])
+  @@index([phoneNumber])
+}
+
+model Project {
+  id                     Int                      @id @default(autoincrement())
+  name                   String
+  description            String?
+  companyId              String
+  startDate              DateTime?
+  endDate                DateTime?
+  status                 ProjectStatus            @default(ONGOING)
+  createdAt              DateTime                 @default(now())
+  budget                 Float?
+  clientName             String
+  projectId              String                   @unique
+  projectType            String
+  assignedEngineerId     Int?
+  location               String?
+  dueDate                DateTime?
+  quotationAmount        Float?
+  actualProgress         Int                      @default(0)
+  Bill                   Bill[]
+  contracts              Contract[]
+  files                  File[]
+  finances               FinancialTransaction[]
+  folders                Folder[]
+  labours                Labour[]
+  labourEntries          LabourAttendance[]
+  materialRequests       MaterialRequest[]
+  materialUsages         MaterialUsage[]
+  notifications          Notification[]
+  assignedEngineer       Engineer?                @relation(fields: [assignedEngineerId], references: [id])
+  company                Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignments            ProjectAssignment[]
+  expenses               ProjectExpense[]
+  projectMaterials       ProjectMaterial[]
+  daily_progress_updates daily_progress_updates[]
+  salaries               EngineerSalary[]
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([status])
+  @@index([assignedEngineerId])
+}
+
+model ProjectExpense {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  category  String
+  amount    Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([category])
+}
+
+model ProjectAssignment {
+  id         Int      @id @default(autoincrement())
+  projectId  Int
+  userId     String
+  assignedAt DateTime @default(now())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model Material {
+  id               Int               @id @default(autoincrement())
+  name             String
+  type             String?
+  unit             String
+  companyId        String
+  createdAt        DateTime          @default(now())
+  category         String
+  defaultRate      Float?
+  description      String?
+  materialId       String            @unique
+  updatedAt        DateTime          @updatedAt
+  vendor           String?
+  dueDate          DateTime?
+  quantity         Float?
+  files            String[]          @default([])
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requests         MaterialRequest[]
+  usages           MaterialUsage[]
+  projectMaterials ProjectMaterial[]
+
+  @@index([companyId])
+  @@index([materialId])
+  @@index([category])
+}
+
+model ProjectMaterial {
+  id         Int                   @id @default(autoincrement())
+  projectId  Int
+  materialId Int
+  assigned   Float
+  used       Float                 @default(0)
+  status     ProjectMaterialStatus @default(ACTIVE)
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+  material   Material              @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  project    Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, materialId])
+  @@index([projectId])
+  @@index([materialId])
+  @@index([status])
+}
+
+model MaterialUsage {
+  id         Int      @id @default(autoincrement())
+  materialId Int
+  projectId  Int
+  quantity   Float
+  date       DateTime @default(now())
+  remarks    String?
+  engineerId Int
+  engineer   Engineer @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([materialId])
+  @@index([engineerId])
+  @@index([date])
+}
+
+model MaterialRequest {
+  id              Int                 @id @default(autoincrement())
+  requestId       String              @unique
+  name            String
+  category        String
+  unit            String
+  defaultRate     Float
+  vendor          String?
+  description     String?
+  type            MaterialRequestType
+  projectId       Int?
+  materialId      Int?
+  quantity        Float?
+  status          RequestStatus       @default(PENDING)
+  requestDate     DateTime            @default(now())
+  reviewDate      DateTime?
+  approvalNotes   String?
+  rejectionReason String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  employeeId      Int
+  reviewedBy      Int?
+  dueDate         DateTime?
+  files           String[]            @default([])
+  adminComment    String?
+  employee        Engineer            @relation("EmployeeRequests", fields: [employeeId], references: [id], onDelete: Cascade)
+  material        Material?           @relation(fields: [materialId], references: [id])
+  project         Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reviewer        Engineer?           @relation("ReviewedRequests", fields: [reviewedBy], references: [id])
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([type])
+  @@index([projectId])
+  @@index([requestDate])
+}
+
+model Notification {
+  id            Int              @id @default(autoincrement())
+  message       String
+  type          NotificationType
+  read          Boolean          @default(false)
+  date          DateTime         @default(now())
+  engineerId    Int
+  recipientRole String?
+  requestId     Int?
+  projectId     Int?
+  engineer      Engineer         @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+  project       Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([engineerId])
+  @@index([projectId])
+  @@index([read])
+  @@index([date])
+  @@index([recipientRole, read])
+}
+
+model Contract {
+  id             Int      @id @default(autoincrement())
+  projectId      Int
+  contractorName String
+  details        String?
+  startDate      DateTime
+  endDate        DateTime
+  createdAt      DateTime @default(now())
+  contactNumber  String
+  contractAmount Float
+  updatedAt      DateTime @updatedAt
+  workStatus     String
+  paidAmount     Float    @default(0)
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model FinancialTransaction {
+  id          Int             @id @default(autoincrement())
+  projectId   Int
+  type        TransactionType
+  amount      Float
+  description String?
+  date        DateTime        @default(now())
+  category    String?
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([type])
+  @@index([category])
+  @@index([date])
+}
+
+model File {
+  id                   Int       @id @default(autoincrement())
+  projectId            Int
+  uploadedBy           String?
+  fileUrl              String
+  fileName             String?
+  uploadedAt           DateTime  @default(now())
+  documentType         String?
+  fileSize             Int?
+  uploadedByEngineerId Int?
+  folderId             Int?
+  folder               Folder?   @relation(fields: [folderId], references: [id])
+  project              Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  engineer             Engineer? @relation(fields: [uploadedByEngineerId], references: [id], onDelete: Cascade)
+  user                 User?     @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([uploadedBy])
+  @@index([uploadedByEngineerId])
+  @@index([folderId])
+}
+
+model Company {
+  id             String          @id @default(uuid())
+  name           String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  logo           String?
+  Bill           Bill[]
+  clients        Client[]
+  labours        Labour[]
+  labourAttendances LabourAttendance[]
+  materials      Material[]
+  projects       Project[]
+  users          User[]
+  crmInvitations CrmInvitation[]
+  engineers      Engineer[]
+  engineerSalaries EngineerSalary[]
+
+  @@map("companies")
+}
+
+model Engineer {
+  id                     Int                      @id @default(autoincrement())
+  name                   String
+  empId                  String
+  phone                  String
+  alternatePhone         String?
+  address                String
+  profileImage           String?
+  companyId              String
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  password               String?
+  username               String?
+  plainPassword          String?
+  designation            String?
+  status                 String                   @default("Active")
+  email                  String?
+  uploadedFiles          File[]
+  materialRequests       MaterialRequest[]        @relation("EmployeeRequests")
+  reviewedRequests       MaterialRequest[]        @relation("ReviewedRequests")
+  materialUsages         MaterialUsage[]
+  notifications          Notification[]
+  projects               Project[]
+  daily_progress_updates daily_progress_updates[]
+  salaries               EngineerSalary[]
+  company                Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([empId, companyId])
+  @@unique([email, companyId])
+  @@unique([username, companyId])
+  @@index([companyId])
+  @@index([email])
+  @@index([username])
+  @@map("engineers")
+}
+
+model EngineerSalary {
+  id            Int      @id @default(autoincrement())
+  engineerId    Int
+  companyId     String
+  projectId     Int?
+  amount        Float
+  allowances    Float    @default(0)
+  deductions    Float    @default(0)
+  expenses      Float    @default(0)
+  allowanceItems Json    @default("[]")
+  deductionItems Json    @default("[]")
+  effectiveFrom DateTime
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  engineer      Engineer @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project       Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([engineerId, effectiveFrom])
+  @@index([companyId])
+  @@index([projectId])
+  @@map("engineer_salaries")
+}
+
+model Labour {
+  id          Int             @id @default(autoincrement())
+  name        String
+  phone       String
+  address     String?
+  companyId   String
+  projectId   Int?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  designation String?
+  projectName String?
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project     Project?        @relation(fields: [projectId], references: [id])
+  payments    LabourPayment[]
+  attendances LabourAttendance[]
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([phone])
+}
+
+model LabourPayment {
+  id        Int      @id @default(autoincrement())
+  labourId  Int
+  amount    Float
+  date      DateTime
+  remarks   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  labour    Labour   @relation(fields: [labourId], references: [id], onDelete: Cascade)
+
+  @@index([labourId])
+  @@index([date])
+}
+
+model LabourAttendance {
+  id             Int      @id @default(autoincrement())
+  labourId       Int
+  companyId      String
+  projectId      Int?
+  attendanceDate DateTime
+  headWage       Float
+  headDayType    String   @default("FULL_DAY")
+  fullHelpers    Int      @default(0)
+  halfHelpers    Int      @default(0)
+  helperRate     Float
+  totalAmount    Float
+  entryStatus    String   @default("DRAFT")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  labour         Labour   @relation(fields: [labourId], references: [id], onDelete: Cascade)
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project        Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, attendanceDate])
+  @@index([labourId])
+  @@index([projectId])
+}
+
+model daily_progress_updates {
+  id         Int      @id @default(autoincrement())
+  projectId  Int
+  engineerId Int
+  message    String
+  workDone   String?
+  challenges String?
+  nextSteps  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
+  engineers  Engineer @relation(fields: [engineerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([createdAt])
+  @@index([engineerId])
+  @@index([projectId])
+}
+
+model Bill {
+  id                      Int        @id @default(autoincrement())
+  billId                  String     @unique
+  billDate                DateTime
+  dueDate                 DateTime?
+  companyName             String?
+  companyAddress          String?
+  companyGST              String?
+  companyPhone            String?
+  companyEmail            String?
+  clientName              String
+  clientAddress           String?
+  clientGST               String?
+  clientPhone             String?
+  clientEmail             String?
+  projectId               Int?
+  projectName             String
+  projectLocation         String?
+  workOrderNo             String?
+  labourCharges           Float      @default(0)
+  transportCharges        Float      @default(0)
+  otherCharges            Float      @default(0)
+  otherChargesDescription String?
+  cgstPercent             Float      @default(9)
+  sgstPercent             Float      @default(9)
+  igstPercent             Float      @default(0)
+  tdsPercent              Float      @default(2)
+  retentionPercent        Float      @default(0)
+  cgstAmount              Float      @default(0)
+  sgstAmount              Float      @default(0)
+  igstAmount              Float      @default(0)
+  tdsAmount               Float      @default(0)
+  retentionAmount         Float      @default(0)
+  advancePaid             Float      @default(0)
+  previousBills           Float      @default(0)
+  subtotal                Float
+  grossAmount             Float
+  totalWithTax            Float
+  netPayable              Float
+  remarks                 String?
+  termsAndConditions      String?
+  status                  String     @default("DRAFT") @db.VarChar(50)
+  companyId               String
+  createdBy               String?
+  createdAt               DateTime   @default(now())
+  updatedAt               DateTime   @updatedAt
+  billType                String?    @default("invoice") @db.VarChar(50)
+  companies               Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  User                    User?      @relation(fields: [createdBy], references: [id])
+  Project                 Project?   @relation(fields: [projectId], references: [id])
+  BillItem                BillItem[]
+
+  @@index([billDate])
+  @@index([billId])
+  @@index([companyId])
+  @@index([projectId])
+  @@index([status])
+}
+
+model PaymentNotification {
+  id            Int      @id @default(autoincrement())
+  title         String
+  message       String
+  customerName  String
+  customerEmail String
+  companyName   String
+  plan          String
+  amount        Float
+  paymentId     String   @unique
+  isRead        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model BillItem {
+  id          Int      @id @default(autoincrement())
+  billId      Int
+  sno         Int
+  description String
+  unit        String
+  quantity    Float
+  rate        Float
+  amount      Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  HSN         String?  @db.VarChar(50)
+  Bill        Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([billId])
+  @@index([sno])
+}
+
+model Client {
+  id             Int             @id @default(autoincrement())
+  companyId      String          @db.VarChar(255)
+  clientName     String          @db.VarChar(255)
+  clientAddress  String?
+  clientGST      String?         @db.VarChar(50)
+  clientPhone    String?         @db.VarChar(20)
+  clientEmail    String?         @db.VarChar(255)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @default(now()) @updatedAt
+  companyName    String?         @db.VarChar(255)
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users          User[]
+  crmInvitations CrmInvitation[]
+
+  @@index([companyId])
+  @@index([clientName])
+}
+
+model CrmInvitation {
+  id               Int       @id @default(autoincrement())
+  idempotencyKey   String    @unique
+  crmLeadId        String    @unique
+  crmCustomerId    String    @unique
+  invitationId     String?   @unique
+  erpCustomerId    String
+  status           String    @default("INVITED")
+  companyId        String
+  clientId         Int
+  registeredUserId String?
+  requestPayload   Json      @default("{}")
+  registeredAt     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  registeredUser   User?     @relation(fields: [registeredUserId], references: [id])
+
+  @@index([companyId])
+  @@index([clientId])
+  @@index([registeredUserId])
+  @@index([status])
+  @@map("crm_invitations")
+}
+
+model Folder {
+  id        Int      @id @default(autoincrement())
+  name      String
+  projectId Int
+  createdAt DateTime @default(now())
+  files     File[]
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model CustomerSubscription {
+  id             Int       @id @default(autoincrement())
+  userId         String
+  crmCustomerId  String
+  erpCustomerId  String
+  eventId        String    @unique
+  action         String
+  status         String
+  plan           String?
+  trialStartDate DateTime?
+  trialEndDate   DateTime?
+  purchaseDate   DateTime?
+  crmSyncedAt    DateTime?
+  crmSyncStatus  String?
+  crmSyncPayload Json      @default("{}")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([crmCustomerId])
+  @@index([erpCustomerId])
+  @@index([status])
+  @@map("customer_subscriptions")
+}
+
+enum ProjectMaterialStatus {
+  ACTIVE
+  COMPLETED
+  NOT_USED
+}
+
+enum MaterialRequestType {
+  GLOBAL
+  PROJECT
+  PROJECT_MATERIAL
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  SUCCESS
+  ERROR
+  INFO
+  WARNING
+}
+
+enum Role {
+  Admin
+  Site_Engineer
+}
+
+enum ProjectStatus {
+  PENDING
+  ONGOING
+  COMPLETED
+  ON_HOLD
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  BUDGET
+}
+
+enum BillStatus {
+  DRAFT
+  SENT
+  PAID
+  PARTIALLY_PAID
+  OVERDUE
+  CANCELLED
+}

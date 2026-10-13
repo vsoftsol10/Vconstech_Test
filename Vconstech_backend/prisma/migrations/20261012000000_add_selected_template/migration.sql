@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "selectedTemplateId" INTEGER NOT NULL DEFAULT 1;

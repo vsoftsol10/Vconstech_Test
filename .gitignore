@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+!.env.example
+uploads/
+dist/
+*.rar
+*.zip
+
+# Ignore local Chrome smoke test profiles
+chrome-pdf-smoke-profile/
+**/chrome-pdf-smoke-profile/

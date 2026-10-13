@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Contract" ADD COLUMN     "paidAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;

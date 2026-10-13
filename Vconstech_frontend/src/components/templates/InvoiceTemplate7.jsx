@@ -1,0 +1,1 @@
+import React from 'react'; import { renderTemplateDocument } from './templateDocument'; export default function InvoiceTemplate7(props) { return <div dangerouslySetInnerHTML={{ __html: renderTemplateDocument(7, props) }} />; }

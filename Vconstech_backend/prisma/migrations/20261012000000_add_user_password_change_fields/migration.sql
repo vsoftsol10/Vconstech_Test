@@ -1,0 +1,2 @@
+-- Intentionally empty: mustChangePassword and passwordExpiresAt were added manually.
+-- Record this migration as applied with `prisma migrate resolve --applied 20261012000000_add_user_password_change_fields`.

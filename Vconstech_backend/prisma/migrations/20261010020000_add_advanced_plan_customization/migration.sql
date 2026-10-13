@@ -1,0 +1,2 @@
+ALTER TABLE "User" ADD COLUMN "customProjectLimit" INTEGER;
+ALTER TABLE "User" ADD COLUMN "customPrice" DOUBLE PRECISION;

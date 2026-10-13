@@ -1,0 +1,6 @@
+import InvoiceTemplate1 from './InvoiceTemplate1';
+import InvoiceTemplate2 from './InvoiceTemplate2'; import InvoiceTemplate3 from './InvoiceTemplate3'; import InvoiceTemplate4 from './InvoiceTemplate4'; import InvoiceTemplate5 from './InvoiceTemplate5'; import InvoiceTemplate6 from './InvoiceTemplate6'; import InvoiceTemplate7 from './InvoiceTemplate7'; import InvoiceTemplate8 from './InvoiceTemplate8'; import InvoiceTemplate9 from './InvoiceTemplate9'; import InvoiceTemplate10 from './InvoiceTemplate10';
+export { adaptBillToTemplate, renderTemplateDocument, templatePrintStyles, templateReferenceStyles, templateSevenStyles } from './templateDocument';
+const components = [InvoiceTemplate1, InvoiceTemplate2, InvoiceTemplate3, InvoiceTemplate4, InvoiceTemplate5, InvoiceTemplate6, InvoiceTemplate7, InvoiceTemplate8, InvoiceTemplate9, InvoiceTemplate10];
+export const templates = Array.from({ length: 10 }, (_, index) => { const id = index + 1; return { id, name: `Template ${id}`, component: components[index], thumbnail: `/templates/template-${id}.png`, minPlan: id <= 1 ? 'TRIAL' : id <= 2 ? 'BASIC' : id <= 5 ? 'PREMIUM' : 'ADVANCED' }; });
+export const getTemplate = (id) => templates.find((template) => template.id === Number(id)) || templates[0];

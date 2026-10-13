@@ -1,0 +1,225 @@
+// auth.routes.js
+import express from 'express';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+
+import { prisma } from '../config/database.js';
+import { isSubscriptionExpired, isTemporaryPasswordExpired, PASSWORD_CHANGE_PURPOSE } from '../utils/passwordSecurity.js';
+
+
+const router = express.Router();
+
+router.post('/signup', async (req, res) => {
+  try {
+    let { name, email, password, role, companyName } = req.body;
+    
+    console.log('📝 Signup attempt:', { email, companyName, role });
+    
+    // Validation
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        error: "All fields are required"
+      });
+    }
+    
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({ 
+        error: 'Email already registered' 
+      });
+    }
+    
+    // Validate role
+    if (role && !['Admin', 'Site_Engineer'].includes(role)) {
+      return res.status(400).json({
+        error: 'Invalid role. Must be Admin or Site_Engineer'
+      });
+    }
+    
+    // Find or create company
+    let company = await prisma.company.findFirst({
+      where: { name: companyName }
+    });
+    
+    if (!company) {
+      company = await prisma.company.create({
+        data: { name: companyName }
+      });
+    }
+    
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    
+    // Create user
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role: role || 'Site_Engineer',
+        companyId: company.id
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        companyId: true,
+        company: { select: { name: true } }
+      }
+    });
+    
+    // Generate JWT token
+    const token = jwt.sign({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      companyId: user.companyId
+    }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    
+    console.log('✅ User created successfully:', user.email);
+    
+    res.status(201).json({
+      message: 'User created successfully',
+      token,
+      user
+    });
+    
+  } catch (error) {
+    console.error('❌ Signup error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Login endpoint
+// Login endpoint
+router.post('/login', async (req, res) => {
+  try {
+    let { email, password } = req.body;
+    
+    console.log('🔐 Login attempt:', email);
+    
+    // Validation
+    if (!email || !password) {
+      console.log('❌ Missing email or password');
+      return res.status(400).json({
+        error: "Email and password are required"
+      });
+    }
+    
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        company: {
+          select: { name: true }
+        }
+      }
+    });
+    
+    if (!user) {
+      console.log('❌ User not found:', email);
+      return res.status(401).json({
+        error: 'Invalid credentials'
+      });
+    }
+
+      if (!user.isActive) {
+      console.log('❌ Inactive account login attempt:', email);
+      return res.status(403).json({
+        error: 'Your account has been deactivated. Please contact your administrator.'
+      });
+    }
+
+    
+    
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    
+    if (!isValidPassword) {
+      console.log('❌ Invalid password for:', email);
+      return res.status(401).json({
+        error: 'Invalid credentials'
+      });
+    }
+
+    if (isSubscriptionExpired(user)) {
+      return res.status(403).json({ error: 'Your trial or subscription has expired. Please renew to continue.' });
+    }
+
+    if (user.mustChangePassword) {
+      if (isTemporaryPasswordExpired(user)) {
+        return res.status(403).json({ error: 'Your temporary password has expired. Please ask your administrator for a reset.' });
+      }
+      const token = jwt.sign({ userId: user.id, email: user.email, purpose: PASSWORD_CHANGE_PURPOSE }, process.env.JWT_SECRET, { expiresIn: '15m' });
+      return res.status(200).json({ message: 'Password change required', token, passwordChangeRequired: true, user: { id: user.id, name: user.name, email: user.email } });
+    }
+    
+    // Generate JWT token
+    const token = jwt.sign({
+      userId: user.id,
+      email: user.email,
+      role: user.role.toUpperCase(),
+      companyId: user.companyId
+    }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    
+    console.log('✅ Login successful:', email);
+    
+    res.status(200).json({
+      message: 'Login successful',
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        companyId: user.companyId,
+        company: user.company,
+        package: user.package,              // ✅ ADD THIS
+        customMembers: user.customMembers   // ✅ ADD THIS
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Login error:', error);
+    console.error('❌ Error stack:', error.stack);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+
+
+// Get companies list (for signup dropdown if needed)
+router.get('/companies', async (req, res) => {
+  try {
+    const companies = await prisma.company.findMany({
+      select: {
+        id: true,
+        name: true
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    });
+
+    res.status(200).json(companies);
+  } catch (error) {
+    console.error('Error fetching companies:', error);
+    res.status(500).json({ 
+      error: 'Internal server error' 
+    });
+  }
+});
+
+export default router;

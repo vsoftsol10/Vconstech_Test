@@ -1,0 +1,2713 @@
+﻿import React, { useState, useEffect } from "react";
+import { FileText, Building2, User, Calendar, DollarSign, Phone, MapPin, Hash, FileSignature, Printer, Eye, Trash2, Pencil, X, Search, Filter, Upload  } from "lucide-react";
+import Navbar from '../../components/common/Navbar';
+import SidePannel from '../../components/common/SidePannel';
+
+
+const Billing = () => {
+  const [activeTab, setActiveTab] = useState('invoice');
+  const [activeSection, setActiveSection] = useState('all'); // all, invoice, quotation, draft
+  const [formData, setFormData] = useState({
+    // Bill Type
+    billType: 'invoice', // 'invoice' or 'quotation'
+    
+    // Bill Information
+    billNumber: "",
+    billDate: "",
+    dueDate: "",
+    
+    // Company/Contractor Information
+    companyName: "",
+    companyAddress: "",
+    companyGST: "",
+    companyPhone: "",
+    companyEmail: "",
+    
+    // Client Information
+    clientName: "",
+    clientAddress: "",
+    clientGST: "",
+    clientPhone: "",
+    clientEmail: "",
+    
+    // Project Information
+    projectName: "",
+    projectLocation: "",
+    workOrderNo: "",
+    
+    // Bill Items
+    items: [{ 
+      sno: 1,
+      description: "", 
+      HSN: 0,
+      unit: "Nos", 
+      quantity: 0, 
+      rate: 0, 
+      amount: 0 
+    }],
+    
+    // Additional Charges
+    labourCharges: 0,
+    transportCharges: 0,
+    otherCharges: 0,
+    otherChargesDescription: "",
+    
+    // Tax & Deductions
+    cgst: 9,
+    sgst: 9,
+    igst: 0,
+    tds: 2,
+    // retention: 0,
+    
+    // Payment Details
+    advancePaid: 0,
+    previousBills: 0,
+    
+    // Notes
+    remarks: "",
+    termsAndConditions: "",
+    
+    // Status
+    status: "open", // open, sent, paid, draft
+  });
+
+  const [bills, setBills] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingBill, setEditingBill] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState('all'); // all, today, week, month, custom
+  const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [clientSuggestions, setClientSuggestions] = useState([]);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+  
+  // Logo and Signature
+  const [companyLogo, setCompanyLogo] = useState(null);
+  const [companySignature, setCompanySignature] = useState(null);
+
+  const [newClient, setNewClient] = useState({
+    clientName: "",
+    clientAddress: "",
+    clientGST: "",
+    clientPhone: "",
+    clientEmail: "",
+  });
+
+  const unitOptions = [
+    "Nos", "Sqft", "Sqm", "Rft", "Rmt", "Cum", "Cft", 
+    "Kg", "Ton", "Litre", "Day", "Month", "Lumpsum","others"
+  ];
+
+  // Fetch bills and clients on component mount
+  useEffect(() => {
+    fetchBills();
+    fetchClients();
+  }, []);
+
+  // Update billType when tab changes
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      billType: activeTab
+    }));
+  }, [activeTab]);
+
+  const fetchBills = async () => {
+    setLoading(true);
+    try {
+      const API_URL = import.meta.env.VITE_API_URL;
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`${API_URL}/bills`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setBills(data.bills || []);
+      }
+    } catch (error) {
+      console.error('Error fetching bills:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchClients = async () => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL;
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`${API_URL}/clients`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setClients(data.clients || []);
+      }
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // Handle client name input with autocomplete
+  const handleClientNameChange = (e) => {
+    const value = e.target.value;
+    setFormData(prev => ({ ...prev, clientName: value }));
+
+    if (value.trim().length > 0) {
+      const filtered = clients.filter(client =>
+        client.clientName.toLowerCase().includes(value.toLowerCase())
+      );
+      setClientSuggestions(filtered);
+      setShowClientSuggestions(true);
+    } else {
+      setShowClientSuggestions(false);
+    }
+  };
+
+  // Select client from suggestions
+  const selectClient = (client) => {
+    setFormData(prev => ({
+      ...prev,
+      clientName: client.clientName,
+      clientAddress: client.clientAddress || '',
+      clientGST: client.clientGST || '',
+      clientPhone: client.clientPhone || '',
+      clientEmail: client.clientEmail || '',
+    }));
+    setShowClientSuggestions(false);
+  };
+
+  const handleItemChange = (index, field, value) => {
+    const updatedItems = [...formData.items];
+    updatedItems[index][field] = value;
+
+    // Calculate amount if quantity or rate changes
+    if (field === "quantity" || field === "rate") {
+      updatedItems[index].amount =
+        parseFloat(updatedItems[index].quantity || 0) *
+        parseFloat(updatedItems[index].rate || 0);
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      items: updatedItems,
+    }));
+  };
+
+  const addItem = () => {
+    setFormData((prev) => ({
+      ...prev,
+      items: [...prev.items, { 
+        sno: prev.items.length + 1,
+        description: "", 
+        HSN: 0,
+        unit: "Nos", 
+        quantity: 0, 
+        rate: 0, 
+        amount: 0 
+      }],
+    }));
+  };
+
+  const removeItem = (index) => {
+    if (formData.items.length > 1) {
+      const updatedItems = formData.items.filter((_, i) => i !== index);
+      // Update serial numbers
+      updatedItems.forEach((item, idx) => {
+        item.sno = idx + 1;
+      });
+      setFormData((prev) => ({
+        ...prev,
+        items: updatedItems,
+      }));
+    }
+  };
+
+  const calculateSubtotal = () => {
+    return formData.items.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+  };
+
+  const calculateGrossAmount = () => {
+    const subtotal = calculateSubtotal();
+    const labour = parseFloat(formData.labourCharges || 0);
+    const transport = parseFloat(formData.transportCharges || 0);
+    const other = parseFloat(formData.otherCharges || 0);
+    return subtotal + labour + transport + other;
+  };
+
+  const calculateCGST = () => {
+    return (calculateGrossAmount() * parseFloat(formData.cgst || 0)) / 100;
+  };
+
+  const calculateSGST = () => {
+    return (calculateGrossAmount() * parseFloat(formData.sgst || 0)) / 100;
+  };
+
+  const calculateIGST = () => {
+    return (calculateGrossAmount() * parseFloat(formData.igst || 0)) / 100;
+  };
+
+  const calculateTotalWithTax = () => {
+    return calculateGrossAmount() + calculateCGST() + calculateSGST() + calculateIGST();
+  };
+
+  const calculateTDS = () => {
+    return (calculateTotalWithTax() * parseFloat(formData.tds || 0)) / 100;
+  };
+
+  const calculateRetention = () => {
+    return (calculateTotalWithTax() * parseFloat(formData.retention || 0)) / 100;
+  };
+
+  const calculateNetPayable = () => {
+    const total = calculateTotalWithTax();
+    const tds = calculateTDS();
+    const retention = calculateRetention();
+    const advance = parseFloat(formData.advancePaid || 0);
+    const previous = parseFloat(formData.previousBills || 0);
+    
+    return total - tds - retention - advance + previous;
+  };
+
+  const handleGenerateBill = async (isDraft = false) => {
+    // Validation
+    if (!formData.billNumber || !formData.billDate || !formData.clientName || !formData.projectName) {
+      alert("Please fill in all required fields (Bill Number, Bill Date, Client Name, Project Name)");
+      return;
+    }
+
+    if (formData.items.length === 0 || !formData.items[0].description) {
+      alert("Please add at least one bill item");
+      return;
+    }
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL;
+      const token = localStorage.getItem('token');
+
+      const billData = {
+        ...formData,
+        status: isDraft ? 'draft' : formData.status
+      };
+
+      const response = await fetch(`${API_URL}/bills`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(billData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        const actionText = isDraft ? 'saved as draft' : 'created';
+        alert(` ${formData.billType === 'invoice' ? 'Invoice' : 'Quotation'} ${formData.billNumber} ${actionText} successfully!`);
+        
+        // Refresh bills list
+        fetchBills();
+        
+        // Reset form
+        resetForm();
+      } else {
+        alert(`Error: Error: ${data.error || 'Failed to create bill'}`);
+      }
+
+    } catch (error) {
+      console.error('Error creating bill:', error);
+      alert('Error: Failed to create bill. Please try again.');
+    }
+  };
+
+  const handleUpdateBill = async (isDraft = false) => {
+    if (!editingBill) return;
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL;
+      const token = localStorage.getItem('token');
+
+      const billData = {
+        ...formData,
+        status: isDraft ? 'draft' : formData.status
+      };
+
+      const response = await fetch(`${API_URL}/bills/${editingBill._id || editingBill.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(billData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        alert(` Bill updated successfully!`);
+        
+        // Refresh bills list
+        fetchBills();
+        
+        // Close modal and reset
+        setShowEditModal(false);
+        setEditingBill(null);
+        resetForm();
+      } else {
+        alert(`Error: Error: ${data.error || 'Failed to update bill'}`);
+      }
+
+    } catch (error) {
+      console.error('Error updating bill:', error);
+      alert('Error: Failed to update bill. Please try again.');
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      billType: activeTab,
+      billNumber: "",
+      billDate: "",
+      dueDate: "",
+      companyName: "",
+      companyAddress: "",
+      companyGST: "",
+      companyPhone: "",
+      companyEmail: "",
+      clientName: "",
+      clientAddress: "",
+      clientGST: "",
+      clientPhone: "",
+      clientEmail: "",
+      projectName: "",
+      projectLocation: "",
+      workOrderNo: "",
+      items: [{ 
+        sno: 1,
+        description: "", 
+        HSN: 0,
+        unit: "Nos", 
+        quantity: 0, 
+        rate: 0, 
+        amount: 0 
+      }],
+      labourCharges: 0,
+      transportCharges: 0,
+      otherCharges: 0,
+      otherChargesDescription: "",
+      cgst: 9,
+      sgst: 9,
+      igst: 0,
+      tds: 2,
+      retention: 0,
+      advancePaid: 0,
+      previousBills: 0,
+      remarks: "",
+      termsAndConditions: "",
+      status: "open",
+    });
+  };
+
+  const handleEditBill = (bill) => {
+    setEditingBill(bill);
+    
+    // Populate form with bill data
+    setFormData({
+      billType: bill.billType || 'invoice',
+      billNumber: bill.billId || bill.billNumber || "",
+      billDate: bill.billDate ? bill.billDate.split('T')[0] : "",
+      dueDate: bill.dueDate ? bill.dueDate.split('T')[0] : "",
+      companyName: bill.companyName || "",
+      companyAddress: bill.companyAddress || "",
+      companyGST: bill.companyGST || "",
+      companyPhone: bill.companyPhone || "",
+      companyEmail: bill.companyEmail || "",
+      clientName: bill.clientName || "",
+      clientAddress: bill.clientAddress || "",
+      clientGST: bill.clientGST || "",
+      clientPhone: bill.clientPhone || "",
+      clientEmail: bill.clientEmail || "",
+      projectName: bill.projectName || "",
+      projectLocation: bill.projectLocation || "",
+      workOrderNo: bill.workOrderNo || "",
+      items: bill.BillItem || bill.items || [{ 
+        sno: 1,
+        description: "", 
+        HSN: 0,
+        unit: "Nos", 
+        quantity: 0, 
+        rate: 0, 
+        amount: 0 
+      }],
+      labourCharges: bill.labourCharges || 0,
+      transportCharges: bill.transportCharges || 0,
+      otherCharges: bill.otherCharges || 0,
+      otherChargesDescription: bill.otherChargesDescription || "",
+      cgst: bill.cgstPercent || bill.cgst || 9,
+      sgst: bill.sgstPercent || bill.sgst || 9,
+      igst: bill.igstPercent || bill.igst || 0,
+      tds: bill.tdsPercent || bill.tds || 2,
+      retention: bill.retentionPercent || bill.retention || 0,
+      advancePaid: bill.advancePaid || 0,
+      previousBills: bill.previousBills || 0,
+      remarks: bill.remarks || "",
+      termsAndConditions: bill.termsAndConditions || "",
+      status: bill.status || "open",
+    });
+    
+    setShowEditModal(true);
+  };
+
+  const handlePrintBill = (bill) => {
+    if (!bill) {
+      alert('Invalid bill data');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    const items = Array.isArray(bill?.BillItem) ? bill.BillItem : 
+                  Array.isArray(bill?.items) ? bill.items : [];
+
+    if (items.length === 0) {
+      alert('No items found in this bill');
+      printWindow.close();
+      return;
+    }
+
+    const formatDate = (dateString) => {
+      if (!dateString) return 'N/A';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-IN', { 
+        day: '2-digit', 
+        month: 'short', 
+        year: 'numeric' 
+      });
+    };
+
+    const billNumber = bill.billId || bill.billNumber || 'N/A';
+    const billDate = formatDate(bill.billDate);
+    const dueDate = formatDate(bill.dueDate);
+    const billType = bill.billType || 'invoice';
+    const documentTitle = billType === 'quotation' ? 'QUOTATION' : 'TAX INVOICE';
+
+    const subtotal = items.reduce(
+      (sum, item) => sum + Number(item?.amount || 0),
+      0
+    );
+
+    const grossAmount =
+      subtotal +
+      Number(bill?.labourCharges || 0) +
+      Number(bill?.transportCharges || 0) +
+      Number(bill?.otherCharges || 0);
+
+    const cgstPercent = Number(bill?.cgstPercent || bill?.cgst || 0);
+    const sgstPercent = Number(bill?.sgstPercent || bill?.sgst || 0);
+    const igstPercent = Number(bill?.igstPercent || bill?.igst || 0);
+    const tdsPercent = Number(bill?.tdsPercent || bill?.tds || 0);
+    const retentionPercent = Number(bill?.retentionPercent || bill?.retention || 0);
+
+    const cgst = (grossAmount * cgstPercent) / 100;
+    const sgst = (grossAmount * sgstPercent) / 100;
+    const igst = (grossAmount * igstPercent) / 100;
+
+    const totalWithTax = grossAmount + cgst + sgst + igst;
+
+    const tds = (totalWithTax * tdsPercent) / 100;
+    const retention = (totalWithTax * retentionPercent) / 100;
+
+    const netPayable =
+      totalWithTax -
+      tds -
+      retention -
+      Number(bill?.advancePaid || 0) +
+      Number(bill?.previousBills || 0);
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${billType === 'quotation' ? 'Quotation' : 'Invoice'} - ${billNumber}</title>
+        <style>
+          @media print {
+            @page { 
+              margin: 1cm; 
+              size: A4;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+            }
+            .print-button { 
+              display: none !important; 
+            }
+          }
+          
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          
+          body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            padding: 20px;
+            max-width: 210mm;
+            margin: 0 auto;
+            background: #f5f5f5;
+          }
+          
+          .invoice-container {
+            background: white;
+            padding: 30px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+          }
+          
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 4px solid #ffbe2a;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+          }
+          
+          .logo-section {
+            flex: 1;
+          }
+          
+          .logo-placeholder {
+            width: 120px;
+            height: 120px;
+            border: 2px dashed #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 12px;
+            text-align: center;
+            padding: 10px;
+            background: #f9f9f9;
+          }
+          
+          .header-center {
+            flex: 2;
+            text-align: center;
+          }
+          
+          .header h1 {
+            font-size: 32px;
+            color: #333;
+            margin-bottom: 15px;
+            letter-spacing: 2px;
+          }
+          
+          .bill-info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+          }
+          
+          .bill-info p {
+            font-size: 14px;
+            color: #666;
+          }
+          
+          .bill-info strong {
+            color: #333;
+            font-weight: 600;
+          }
+          
+          .info-section {
+            margin-bottom: 25px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #ffbe2a;
+          }
+          
+          .section-title {
+            font-weight: 700;
+            font-size: 14px;
+            color: #333;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+          }
+          
+          .info-section p {
+            margin: 6px 0;
+            font-size: 13px;
+            color: #555;
+            line-height: 1.6;
+          }
+          
+          .info-section strong {
+            color: #333;
+            font-weight: 600;
+          }
+          
+          .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+          }
+          
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 13px;
+          }
+          
+          th {
+            background: #333;
+            color: white;
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+          }
+          
+          td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            color: #555;
+          }
+          
+          tbody tr:nth-child(even) {
+            background: #f9f9f9;
+          }
+          
+          tbody tr:hover {
+            background: #f0f0f0;
+          }
+          
+          .text-right { 
+            text-align: right; 
+          }
+          
+          .text-center { 
+            text-align: center; 
+          }
+          
+          .summary-table {
+            margin-top: 30px;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+          }
+          
+          .summary-table td {
+            padding: 8px 15px;
+            border: none;
+            border-bottom: 1px solid #eee;
+          }
+          
+          .summary-table tr:last-child td {
+            border-bottom: none;
+          }
+          
+          .summary-table .label {
+            font-weight: 500;
+            color: #555;
+          }
+          
+          .summary-table .value {
+            text-align: right;
+            font-weight: 600;
+            color: #333;
+          }
+          
+          .summary-table .subtotal-row {
+            border-top: 2px solid #ddd;
+          }
+          
+          .summary-table .total-row {
+            background: #333;
+            color: white;
+            font-size: 16px;
+          }
+          
+          .summary-table .total-row td {
+            padding: 12px 15px;
+            border-bottom: none;
+          }
+          
+          .net-payable-row {
+            background: #ffbe2a !important;
+            font-size: 18px !important;
+            font-weight: 700 !important;
+          }
+          
+          .net-payable-row td {
+            padding: 15px !important;
+            color: #000 !important;
+          }
+          
+          .additional-info {
+            margin-top: 30px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #ffbe2a;
+          }
+          
+          .additional-info h4 {
+            font-size: 13px;
+            color: #333;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          
+          .additional-info p {
+            font-size: 12px;
+            color: #555;
+            line-height: 1.6;
+            white-space: pre-line;
+          }
+          
+          .footer {
+            margin-top: 40px;
+            text-align: center;
+            padding-top: 20px;
+            border-top: 2px solid #eee;
+            position: relative;
+          }
+          
+          .signature-section {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            margin-bottom: 20px;
+          }
+          
+          .signature-box {
+            text-align: center;
+            width: 200px;
+          }
+          
+          .signature-line {
+            border-top: 2px solid #333;
+            margin-bottom: 10px;
+            margin-top: 50px;
+          }
+          
+          .signature-label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 600;
+          }
+          
+          .footer p {
+            font-size: 11px;
+            color: #999;
+            font-style: italic;
+          }
+          
+          .print-button {
+            background: #333;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.3s;
+          }
+          
+          .print-button:hover {
+            background: #ffbe2a;
+            color: #000;
+          }
+        </style>
+      </head>
+      <body>
+        <button class="print-button" onclick="window.print()">
+           Print ${billType === 'quotation' ? 'Quotation' : 'Invoice'}
+        </button>
+        
+        <div class="invoice-container">
+          <div class="header">
+            <div class="logo-section">
+              <div class="logo-placeholder">
+                Company Logo
+              </div>
+            </div>
+            
+            <div class="header-center">
+              <h1>${documentTitle}</h1>
+              <div class="bill-info">
+                <p><strong>${billType === 'quotation' ? 'Quote' : 'Bill'} No:</strong> ${billNumber}</p>
+                <p><strong>Date:</strong> ${billDate}</p>
+                ${dueDate !== 'N/A' && billType === 'invoice' ? `<p><strong>Due Date:</strong> ${dueDate}</p>` : ''}
+              </div>
+            </div>
+          </div>
+
+          <div class="two-column">
+            <div class="info-section">
+              <div class="section-title">FROM (Contractor/Company)</div>
+              <p><strong>${bill.companyName || 'N/A'}</strong></p>
+              ${bill.companyAddress ? `<p>${bill.companyAddress}</p>` : ''}
+              ${bill.companyGST ? `<p><strong>GST:</strong> ${bill.companyGST}</p>` : ''}
+              ${bill.companyPhone ? `<p><strong>Phone:</strong> ${bill.companyPhone}</p>` : ''}
+              ${bill.companyEmail ? `<p><strong>Email:</strong> ${bill.companyEmail}</p>` : ''}
+            </div>
+
+            <div class="info-section">
+              <div class="section-title">TO (Client)</div>
+              <p><strong>${bill.clientName || 'N/A'}</strong></p>
+              ${bill.clientAddress ? `<p>${bill.clientAddress}</p>` : ''}
+              ${bill.clientGST ? `<p><strong>GST:</strong> ${bill.clientGST}</p>` : ''}
+              ${bill.clientPhone ? `<p><strong>Phone:</strong> ${bill.clientPhone}</p>` : ''}
+              ${bill.clientEmail ? `<p><strong>Email:</strong> ${bill.clientEmail}</p>` : ''}
+            </div>
+          </div>
+
+          <div class="info-section">
+            <div class="section-title">PROJECT DETAILS</div>
+            <p><strong>Project:</strong> ${bill.projectName || 'N/A'}</p>
+            ${bill.projectLocation ? `<p><strong>Location:</strong> ${bill.projectLocation}</p>` : ''}
+            ${bill.workOrderNo ? `<p><strong>Work Order No:</strong> ${bill.workOrderNo}</p>` : ''}
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 50px;">S.No</th>
+                <th>Description of Work</th>
+                <th style="width: 80px;">Unit</th>
+                <th style="width: 100px;">Quantity</th>
+                <th style="width: 120px;">Rate</th>
+                <th class="text-right" style="width: 130px;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map((item, idx) => `
+                <tr>
+                  <td class="text-center">${idx + 1}</td>
+                  <td>${item.description || 'N/A'}</td>
+                  <td class="text-center">${item.unit || 'Nos'}</td>
+                  <td class="text-center">${Number(item.quantity || 0).toFixed(2)}</td>
+                  <td class="text-right">Rs. ${Number(item.rate || 0).toFixed(2)}</td>
+                  <td class="text-right"><strong>Rs. ${Number(item.amount || 0).toFixed(2)}</strong></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <table class="summary-table">
+            <tr>
+              <td class="label">Subtotal (Items)</td>
+              <td class="value">Rs. ${subtotal.toFixed(2)}</td>
+            </tr>
+            ${bill.labourCharges > 0 ? `
+              <tr>
+                <td class="label">Labour Charges</td>
+                <td class="value">Rs. ${Number(bill.labourCharges).toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            ${bill.transportCharges > 0 ? `
+              <tr>
+                <td class="label">Transport Charges</td>
+                <td class="value">Rs. ${Number(bill.transportCharges).toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            ${bill.otherCharges > 0 ? `
+              <tr>
+                <td class="label">Other Charges${bill.otherChargesDescription ? ' (' + bill.otherChargesDescription + ')' : ''}</td>
+                <td class="value">Rs. ${Number(bill.otherCharges).toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            <tr class="subtotal-row">
+              <td class="label"><strong>Gross Amount</strong></td>
+              <td class="value"><strong>Rs. ${grossAmount.toFixed(2)}</strong></td>
+            </tr>
+            ${cgstPercent > 0 ? `
+              <tr>
+                <td class="label">CGST (${cgstPercent}%)</td>
+                <td class="value">Rs. ${cgst.toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            ${sgstPercent > 0 ? `
+              <tr>
+                <td class="label">SGST (${sgstPercent}%)</td>
+                <td class="value">Rs. ${sgst.toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            ${igstPercent > 0 ? `
+              <tr>
+                <td class="label">IGST (${igstPercent}%)</td>
+                <td class="value">Rs. ${igst.toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            <tr class="total-row">
+              <td style="color: #fff;"><strong>Total with Tax</strong></td>
+              <td style="color: #fff;"><strong>Rs. ${totalWithTax.toFixed(2)}</strong></td>
+            </tr>
+            ${tdsPercent > 0 ? `
+              <tr style="color: #d32f2f;">
+                <td class="label">Less: TDS (${tdsPercent}%)</td>
+                <td class="value">- Rs. ${tds.toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            ${retentionPercent > 0 ? `
+              <tr style="color: #d32f2f;">
+                <td class="label">Less: Retention (${retentionPercent}%)</td>
+                <td class="value">- Rs. ${retention.toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            ${bill.advancePaid > 0 ? `
+              <tr style="color: #d32f2f;">
+                <td class="label">Less: Advance Paid</td>
+                <td class="value">- Rs. ${Number(bill.advancePaid).toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            ${bill.previousBills > 0 && billType === 'invoice' ? `
+              <tr style="color: #2e7d32;">
+                <td class="label">Add: Previous Bills</td>
+                <td class="value">+ Rs. ${Number(bill.previousBills).toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            <tr class="net-payable-row">
+              <td><strong>${billType === 'quotation' ? 'TOTAL QUOTED AMOUNT' : 'NET PAYABLE AMOUNT'}</strong></td>
+              <td><strong>Rs. ${netPayable.toFixed(2)}</strong></td>
+            </tr>
+          </table>
+
+          ${bill.remarks ? `
+            <div class="additional-info">
+              <h4>Remarks</h4>
+              <p>${bill.remarks}</p>
+            </div>
+          ` : ''}
+
+          ${bill.termsAndConditions ? `
+            <div class="additional-info">
+              <h4>Terms & Conditions</h4>
+              <p>${bill.termsAndConditions}</p>
+            </div>
+          ` : ''}
+
+          <div class="signature-section">
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              <div class="signature-label">Client Signature</div>
+            </div>
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              <div class="signature-label">Authorized Signature</div>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>This is a computer-generated ${billType === 'quotation' ? 'quotation' : 'invoice'} and does not require a signature</p>
+            <p>Generated on ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+  };
+
+  const handleDeleteBill = async (billId) => {
+    if (!billId) {
+      alert('Invalid bill ID');
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to delete this bill?')) {
+      return;
+    }
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL;
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`${API_URL}/bills/${billId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        alert(' Bill deleted successfully!');
+        fetchBills();
+      } else {
+        alert(`Error: Error: ${data.error || 'Failed to delete bill'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting bill:', error);
+      alert('Error: Failed to delete bill. Please try again.');
+    }
+  };
+
+  const handleUpdateStatus = async (billId, newStatus) => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL;
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`${API_URL}/bills/${billId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        fetchBills();
+      } else {
+        alert(`Error: Error: ${data.error || 'Failed to update status'}`);
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('Error: Failed to update status. Please try again.');
+    }
+  };
+
+  // Add New Client
+  const handleAddClient = async () => {
+    if (!newClient.clientName) {
+      alert('Please enter client name');
+      return;
+    }
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL;
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`${API_URL}/clients`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(newClient)
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        alert(' Client added successfully!');
+        fetchClients();
+        setShowClientModal(false);
+        
+        // Reset new client form
+        setNewClient({
+          clientName: "",
+          clientAddress: "",
+          clientGST: "",
+          clientPhone: "",
+          clientEmail: "",
+        });
+      } else {
+        alert(`Error: Error: ${data.error || 'Failed to add client'}`);
+      }
+    } catch (error) {
+      console.error('Error adding client:', error);
+      alert('Error: Failed to add client. Please try again.');
+    }
+  };
+
+  // Filter bills by date
+  const filterBillsByDate = (bills) => {
+    const now = new Date();
+    
+    switch (dateFilter) {
+      case 'today':
+        return bills.filter(bill => {
+          const billDate = new Date(bill.billDate);
+          return billDate.toDateString() === now.toDateString();
+        });
+      
+      case 'week':
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return bills.filter(bill => {
+          const billDate = new Date(bill.billDate);
+          return billDate >= weekAgo && billDate <= now;
+        });
+      
+      case 'month':
+        return bills.filter(bill => {
+          const billDate = new Date(bill.billDate);
+          return billDate.getMonth() === now.getMonth() && 
+                 billDate.getFullYear() === now.getFullYear();
+        });
+      
+      case 'custom':
+        if (!customDateRange.start || !customDateRange.end) return bills;
+        return bills.filter(bill => {
+          const billDate = new Date(bill.billDate);
+          const start = new Date(customDateRange.start);
+          const end = new Date(customDateRange.end);
+          return billDate >= start && billDate <= end;
+        });
+      
+      default:
+        return bills;
+    }
+  };
+
+  // Filter bills by section and search
+  const getFilteredBills = () => {
+    let filtered = bills;
+
+    // Filter by section
+    if (activeSection === 'invoice') {
+      filtered = filtered.filter(bill => bill.billType === 'invoice' && bill.status !== 'draft');
+    } else if (activeSection === 'quotation') {
+      filtered = filtered.filter(bill => bill.billType === 'quotation' && bill.status !== 'draft');
+    } else if (activeSection === 'draft') {
+      filtered = filtered.filter(bill => bill.status === 'draft');
+    }
+
+    // Filter by date
+    filtered = filterBillsByDate(filtered);
+
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(bill => 
+        (bill.billId || bill.billNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (bill.clientName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (bill.projectName || '').toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    return filtered;
+  };
+
+  const filteredBills = getFilteredBills();
+
+  // Get status badge color
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'open':
+        return 'bg-yellow-100 text-yellow-700';
+      case 'sent':
+        return 'bg-blue-100 text-blue-700';
+      case 'paid':
+        return 'bg-green-100 text-green-700';
+      case 'draft':
+        return 'bg-gray-100 text-gray-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <nav className="fixed top-0 left-0 right-0 z-50 h-16">
+        <Navbar />
+      </nav>
+
+      <aside className="fixed left-0 top-0 bottom-0 w-16 md:w-64 z-40 overflow-y-auto">
+        <SidePannel />
+      </aside>
+
+      <div className="pt-20 pl-16 md:pl-64">
+        <div className="p-4 sm:p-6 lg:p-8">
+          <div className="max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <div className="flex items-center gap-3 mb-2">
+                <FileText className="w-8 h-8 text-[#ffbe2a]" />
+                <h1 className="text-3xl font-bold text-gray-800">Billing Management</h1>
+              </div>
+              <p className="text-gray-600">Generate professional invoices and quotations</p>
+            </div>
+
+            {/* Tabs Section - Invoice/Quotation */}
+            <div className="bg-white rounded-t-lg border-b border-gray-200 px-3 sm:px-4 md:px-6 overflow-x-auto">
+              <div className="flex space-x-4 sm:space-x-8">
+                {['invoice', 'quotation'].map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`py-3 sm:py-4 px-2 border-b-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                      activeTab === tab
+                        ? 'border-yellow-600 text-yellow-500'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Billing Form */}
+            <div className="bg-white rounded-b-lg shadow-md p-6 mb-6">
+              
+              {/* Bill Information */}
+              <div className="mb-8">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 pb-2 border-b-2 border-[#ffbe2a]">
+                  {activeTab === 'invoice' ? 'Invoice' : 'Quotation'} Information
+                </h2>
+                <div className="grid md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      {activeTab === 'invoice' ? 'Invoice' : 'Quote'} Number <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        name="billNumber"
+                        value={formData.billNumber}
+                        onChange={handleInputChange}
+                        placeholder={activeTab === 'invoice' ? 'INV-001' : 'QUO-001'}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Date <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="date"
+                        name="billDate"
+                        value={formData.billDate}
+                        onChange={handleInputChange}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {activeTab === 'invoice' && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Due Date
+                      </label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                        <input
+                          type="date"
+                          name="dueDate"
+                          value={formData.dueDate}
+                          onChange={handleInputChange}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Client Information */}
+              <div className="mb-8">
+                <div className="flex flex-col sm:flex-row gap-3 mb-4 items-start sm:items-center justify-between">
+                  <h2 className="text-xl font-bold text-gray-800 pb-2 border-b-2 border-[#ffbe2a]">
+                    Client Information
+                  </h2>
+                  <button 
+                    onClick={() => setShowClientModal(true)}
+                    className="text-sm font-semibold text-white bg-[#ffbe2a] px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                    + Add New Client
+                  </button>
+                </div>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="relative">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Client Name <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        name="clientName"
+                        value={formData.clientName}
+                        onChange={handleClientNameChange}
+                        onFocus={() => formData.clientName && setShowClientSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
+                        placeholder="Start typing client name..."
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                        required
+                      />
+                    </div>
+                    
+                    {/* Client Suggestions Dropdown */}
+                    {showClientSuggestions && clientSuggestions.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {clientSuggestions.map((client, index) => (
+                          <div
+                            key={index}
+                            onClick={() => selectClient(client)}
+                            className="px-4 py-3 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
+                          >
+                            <div className="font-semibold text-gray-800">{client.clientName}</div>
+                            {client.clientPhone && (
+                              <div className="text-sm text-gray-600">{client.clientPhone}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Client GST Number
+                    </label>
+                    <input
+                      type="text"
+                      name="clientGST"
+                      value={formData.clientGST}
+                      onChange={handleInputChange}
+                      placeholder="29XXXXXXXXXXXXX"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Client Address
+                    </label>
+                    <textarea
+                      name="clientAddress"
+                      value={formData.clientAddress}
+                      onChange={handleInputChange}
+                      rows="2"
+                      placeholder="Client Address"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Client Phone
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="tel"
+                        name="clientPhone"
+                        value={formData.clientPhone}
+                        onChange={handleInputChange}
+                        placeholder="+91 XXXXX XXXXX"
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Client Email
+                    </label>
+                    <input
+                      type="email"
+                      name="clientEmail"
+                      value={formData.clientEmail}
+                      onChange={handleInputChange}
+                      placeholder="client@example.com"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Company Information */}
+              <div className="mb-8">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 pb-2 border-b-2 border-[#ffbe2a]">
+                  Your Company Information
+                </h2>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Company Name
+                    </label>
+                    <input
+                      type="text"
+                      name="companyName"
+                      value={formData.companyName}
+                      onChange={handleInputChange}
+                      placeholder="Your Company Name"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      GST Number
+                    </label>
+                    <input
+                      type="text"
+                      name="companyGST"
+                      value={formData.companyGST}
+                      onChange={handleInputChange}
+                      placeholder="29XXXXXXXXXXXXX"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Address
+                    </label>
+                    <textarea
+                      name="companyAddress"
+                      value={formData.companyAddress}
+                      onChange={handleInputChange}
+                      rows="2"
+                      placeholder="Company Address"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Phone
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="tel"
+                        name="companyPhone"
+                        value={formData.companyPhone}
+                        onChange={handleInputChange}
+                        placeholder="+91 XXXXX XXXXX"
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      name="companyEmail"
+                      value={formData.companyEmail}
+                      onChange={handleInputChange}
+                      placeholder="company@example.com"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Project Information */}
+              <div className="mb-8">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 pb-2 border-b-2 border-[#ffbe2a]">
+                  Project Information
+                </h2>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Project Name <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        name="projectName"
+                        value={formData.projectName}
+                        onChange={handleInputChange}
+                        placeholder="Project Name"
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Work Order No.
+                    </label>
+                    <div className="relative">
+                      <FileSignature className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        name="workOrderNo"
+                        value={formData.workOrderNo}
+                        onChange={handleInputChange}
+                        placeholder="WO-001"
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Project Location
+                    </label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
+                      <textarea
+                        name="projectLocation"
+                        value={formData.projectLocation}
+                        onChange={handleInputChange}
+                        rows="2"
+                        placeholder="Project Site Address"
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none resize-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bill Items */}
+              <div className="mb-8">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 pb-2 border-b-2 border-[#ffbe2a]">
+                  {activeTab === 'invoice' ? 'Bill' : 'Quote'} Items
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="px-3 py-3 text-left text-sm font-semibold text-gray-700 border">S.No</th>
+                        <th className="px-3 py-3 text-left text-sm font-semibold text-gray-700 border" style={{minWidth: '300px'}}>Description of Work</th>
+                        <th className="px-3 py-3 text-left text-sm font-semibold text-gray-700 border">HSN/SAC</th>
+                        <th className="px-3 py-3 text-left text-sm font-semibold text-gray-700 border">Unit</th>
+                        <th className="px-3 py-3 text-left text-sm font-semibold text-gray-700 border">Quantity</th>
+                        <th className="px-3 py-3 text-left text-sm font-semibold text-gray-700 border">Rate</th>
+                        <th className="px-3 py-3 text-left text-sm font-semibold text-gray-700 border">Amount</th>
+                        <th className="px-3 py-3 text-left text-sm font-semibold text-gray-700 border">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {formData.items.map((item, index) => (
+                        <tr key={index} className="border-b">
+                          <td className="px-3 py-3 border text-center font-semibold">
+                            {item.sno}
+                          </td>
+                          <td className="px-3 py-3 border">
+                            <textarea
+                              value={item.description}
+                              onChange={(e) => handleItemChange(index, "description", e.target.value)}
+                              placeholder="Enter detailed work description..."
+                              rows="3"
+                              className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none resize-y"
+                              style={{minHeight: '60px'}}
+                            />
+                          </td>
+                          <td className="px-3 py-3 border">
+                            <input
+                              type="number"
+                              value={item.HSN}
+                              onChange={(e) => handleItemChange(index, "HSN", e.target.value)}
+                              min="0"
+                              placeholder="HSN/SAC"
+                              className="w-24 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                            />
+                          </td>
+                          <td className="px-3 py-3 border">
+                            <select
+                              value={item.unit}
+                              onChange={(e) => handleItemChange(index, "unit", e.target.value)}
+                              className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                            >
+                              {unitOptions.map((unit) => (
+                                <option key={unit} value={unit}>{unit}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-3 py-3 border">
+                            <input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
+                              min="0"
+                              step="0.01"
+                              className="w-24 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                            />
+                          </td>
+                          <td className="px-3 py-3 border">
+                            <input
+                              type="number"
+                              value={item.rate}
+                              onChange={(e) => handleItemChange(index, "rate", e.target.value)}
+                              min="0"
+                              step="0.01"
+                              className="w-28 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                            />
+                          </td>
+                          <td className="px-3 py-3 border">
+                            <div className="flex items-center gap-1 text-gray-700 font-semibold">
+                              Rs. {item.amount.toFixed(2)}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 border text-center">
+                            <button
+                              onClick={() => removeItem(index)}
+                              disabled={formData.items.length === 1}
+                              className={`px-3 py-1 text-xs rounded ${
+                                formData.items.length === 1
+                                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                  : "bg-red-500 text-white hover:bg-red-600"
+                              }`}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <button
+                  onClick={addItem}
+                  className="mt-4 px-4 py-2 bg-[#ffbe2a] text-black font-semibold rounded-lg hover:bg-[#e5ab26] transition-colors"
+                >
+                  + Add Item
+                </button>
+              </div>
+
+              {/* Additional Charges */}
+              <div className="mb-8">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 pb-2 border-b-2 border-[#ffbe2a]">
+                  Additional Charges
+                </h2>
+                <div className="grid md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Labour Charges (Rs.)
+                    </label>
+                    <input
+                      type="number"
+                      name="labourCharges"
+                      value={formData.labourCharges}
+                      onChange={handleInputChange}
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Transport Charges (Rs.)
+                    </label>
+                    <input
+                      type="number"
+                      name="transportCharges"
+                      value={formData.transportCharges}
+                      onChange={handleInputChange}
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Other Charges (Rs.)
+                    </label>
+                    <input
+                      type="number"
+                      name="otherCharges"
+                      value={formData.otherCharges}
+                      onChange={handleInputChange}
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Other Charges Description
+                    </label>
+                    <input
+                      type="text"
+                      name="otherChargesDescription"
+                      value={formData.otherChargesDescription}
+                      onChange={handleInputChange}
+                      placeholder="Describe other charges"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Tax & Deductions */}
+              <div className="mb-8">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 pb-2 border-b-2 border-[#ffbe2a]">
+                  Tax & Deductions
+                </h2>
+                <div className="grid md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      CGST (%)
+                    </label>
+                    <input
+                      type="number"
+                      name="cgst"
+                      value={formData.cgst}
+                      onChange={handleInputChange}
+                      min="0"
+                      step="0.01"
+                      placeholder="9"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      SGST (%)
+                    </label>
+                    <input
+                      type="number"
+                      name="sgst"
+                      value={formData.sgst}
+                      onChange={handleInputChange}
+                      min="0"
+                      step="0.01"
+                      placeholder="9"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      IGST (%)
+                    </label>
+                    <input
+                      type="number"
+                      name="igst"
+                      value={formData.igst}
+                      onChange={handleInputChange}
+                      min="0"
+                      step="0.01"
+                      placeholder="0"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      TDS (%)
+                    </label>
+                    <input
+                      type="number"
+                      name="tds"
+                      value={formData.tds}
+                      onChange={handleInputChange}
+                      min="0"
+                      step="0.01"
+                      placeholder="2"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Retention (%)
+                    </label>
+                    <input
+                      type="number"
+                      name="retention"
+                      value={formData.retention}
+                      onChange={handleInputChange}
+                      min="0"
+                      step="0.01"
+                      placeholder="0"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Details */}
+              <div className="mb-8">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 pb-2 border-b-2 border-[#ffbe2a]">
+                  Payment Details
+                </h2>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Advance to be Paid (Rs.)
+                    </label>
+                    <input
+                      type="text"
+                      name="advancePaid"
+                      value={formData.advancePaid}
+                      onChange={handleInputChange}
+                      placeholder="0000"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+
+                  {activeTab === 'invoice' && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Previous Bills (Rs.)
+                      </label>
+                      <input
+                        type="number"
+                        name="previousBills"
+                        value={formData.previousBills}
+                        onChange={handleInputChange}
+                        placeholder="0000"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Remarks and Terms */}
+              <div className="mb-8">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 pb-2 border-b-2 border-[#ffbe2a]">
+                  Additional Information
+                </h2>
+                <div className="grid md:grid-cols-1 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Remarks
+                    </label>
+                    <textarea
+                      name="remarks"
+                      value={formData.remarks}
+                      onChange={handleInputChange}
+                      rows="3"
+                      placeholder="Any special remarks or notes"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Terms & Conditions
+                    </label>
+                    <textarea
+                      name="termsAndConditions"
+                      value={formData.termsAndConditions}
+                      onChange={handleInputChange}
+                      rows="4"
+                      placeholder="Enter payment terms and conditions"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none resize-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bill Summary */}
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-6 mb-6 border-2 border-gray-200">
+                <h2 className="text-xl font-bold text-gray-800 mb-6 pb-2 border-b-2 border-[#ffbe2a]">
+                  {activeTab === 'invoice' ? 'Bill' : 'Quote'} Summary
+                </h2>
+                <div className="space-y-3">
+                  <div className="flex justify-between text-gray-700 text-l">
+                    <span className="font-semibold">Subtotal (Items):</span>
+                    <span className="font-bold">Rs. {calculateSubtotal().toFixed(2)}</span>
+                  </div>
+                  
+                  {(formData.labourCharges > 0 || formData.transportCharges > 0 || formData.otherCharges > 0) && (
+                    <>
+                      {formData.labourCharges > 0 && (
+                        <div className="flex justify-between text-gray-600">
+                          <span className="pl-4">+ Labour Charges:</span>
+                          <span>Rs. {parseFloat(formData.labourCharges).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {formData.transportCharges > 0 && (
+                        <div className="flex justify-between text-gray-600">
+                          <span className="pl-4">+ Transport Charges:</span>
+                          <span>Rs. {parseFloat(formData.transportCharges).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {formData.otherCharges > 0 && (
+                        <div className="flex justify-between text-gray-600">
+                          <span className="pl-4">+ Other Charges:</span>
+                          <span>Rs. {parseFloat(formData.otherCharges).toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-gray-700 text-lg pt-2 border-t border-gray-300">
+                        <span className="font-semibold">Gross Amount:</span>
+                        <span className="font-bold">Rs. {calculateGrossAmount().toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
+                  
+                  {formData.cgst > 0 && (
+                    <div className="flex justify-between text-gray-600">
+                      <span className="text-l pl-4">+ CGST ({formData.cgst}%):</span>
+                      <span>Rs. {calculateCGST().toFixed(2)}</span>
+                    </div>
+                  )}
+                  {formData.sgst > 0 && (
+                    <div className="flex justify-between text-gray-600">
+                      <span className="text-l pl-4">+ SGST ({formData.sgst}%):</span>
+                      <span>Rs. {calculateSGST().toFixed(2)}</span>
+                    </div>
+                  )}
+                  {formData.igst > 0 && (
+                    <div className="flex justify-between text-gray-600">
+                      <span className="text-l pl-4">+ IGST ({formData.igst}%):</span>
+                      <span>Rs. {calculateIGST().toFixed(2)}</span>
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-between text-gray-700 text-l pt-2 border-t border-gray-300">
+                    <span className="font-semibold">Total with Tax:</span>
+                    <span className="font-bold">Rs. {calculateTotalWithTax().toFixed(2)}</span>
+                  </div>
+                  
+                  {formData.tds > 0 && (
+                    <div className="flex justify-between text-red-600">
+                      <span className=" text-l pl-4">- TDS ({formData.tds}%):</span>
+                      <span>Rs. {calculateTDS().toFixed(2)}</span>
+                    </div>
+                  )}
+                  {formData.retention > 0 && (
+                    <div className="flex justify-between text-red-600">
+                      <span className="pl-4">- Retention ({formData.retention}%):</span>
+                      <span>Rs. {calculateRetention().toFixed(2)}</span>
+                    </div>
+                  )}
+                  {formData.advancePaid > 0 && (
+                    <div className="flex justify-between text-red-600">
+                      <span className="pl-4">- Advance Paid:</span>
+                      <span>Rs. {parseFloat(formData.advancePaid).toFixed(2)}</span>
+                    </div>
+                  )}
+                  {formData.previousBills > 0 && activeTab === 'invoice' && (
+                    <div className="flex justify-between text-green-600">
+                      <span className="pl-4">+ Previous Bills:</span>
+                      <span>Rs. {parseFloat(formData.previousBills).toFixed(2)}</span>
+                    </div>
+                  )}
+                  
+                  <div className="border-t-4 border-[#ffbe2a] pt-4 mt-4">
+                    <div className="flex justify-between text-l font-bold">
+                      <span className="text-gray-900">
+                        {activeTab === 'invoice' ? 'Net Payable Amount:' : 'Total Quoted Amount:'}
+                      </span>
+                      <span className="text-[#ffbe2a]">Rs. {calculateNetPayable().toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Generate Bill Buttons */}
+            <div className="flex justify-center pb-6 gap-4 flex-wrap">
+              <button
+                onClick={() => handleGenerateBill(false)}
+                className="px-6 py-2 bg-black text-white font-bold text-xl rounded-lg hover:bg-gray-800 transition-all duration-200 shadow-lg hover:shadow-2xl transform hover:scale-105"
+              >
+                Generate {activeTab === 'invoice' ? 'Invoice' : 'Quotation'}
+              </button>
+
+              <button
+                onClick={() => handleGenerateBill(false)}
+                className="px-6 py-2 bg-[#ffbe2a] text-black font-bold text-xl rounded-lg hover:bg-[#e5ab26] transition-all duration-200 shadow-lg hover:shadow-2xl transform hover:scale-105"
+              >
+                Save {activeTab === 'invoice' ? 'Invoice' : 'Quotation'}
+              </button>
+
+              <button
+                onClick={() => handleGenerateBill(true)}
+                className="px-6 py-2 bg-gray-500 text-white font-bold text-xl rounded-lg hover:bg-gray-600 transition-all duration-200 shadow-lg hover:shadow-2xl transform hover:scale-105"
+              >
+                Save as Draft
+              </button>
+            </div>
+
+            {/* Bills List Section with Tabs */}
+            <div className="bg-white rounded-lg shadow-md mb-6">
+              {/* Section Tabs */}
+              <div className="border-b border-gray-200 px-6">
+                <div className="flex space-x-8">
+                  {['all', 'invoice', 'quotation', 'draft'].map(section => (
+                    <button
+                      key={section}
+                      onClick={() => setActiveSection(section)}
+                      className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                        activeSection === section
+                          ? 'border-[#ffbe2a] text-[#ffbe2a]'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {section.charAt(0).toUpperCase() + section.slice(1)}
+                      <span className="ml-2 text-xs bg-gray-100 px-2 py-1 rounded-full">
+                        {section === 'all' 
+                          ? bills.length 
+                          : section === 'invoice'
+                          ? bills.filter(b => b.billType === 'invoice' && b.status !== 'draft').length
+                          : section === 'quotation'
+                          ? bills.filter(b => b.billType === 'quotation' && b.status !== 'draft').length
+                          : bills.filter(b => b.status === 'draft').length
+                        }
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Search and Filter Bar */}
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  {/* Search Box */}
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Search by bill number, client name, or project..."
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                    />
+                  </div>
+
+                  {/* Filter Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                      className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <Filter className="w-5 h-5 text-gray-600" />
+                      <span className="text-sm font-medium text-gray-700">
+                        {dateFilter === 'all' ? 'All Time' :
+                         dateFilter === 'today' ? 'Today' :
+                         dateFilter === 'week' ? 'This Week' :
+                         dateFilter === 'month' ? 'This Month' :
+                         'Custom Range'}
+                      </span>
+                    </button>
+
+                    {showFilterDropdown && (
+                      <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                        <div className="py-1">
+                          <button
+                            onClick={() => {
+                              setDateFilter('all');
+                              setShowFilterDropdown(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                          >
+                            All Time
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDateFilter('today');
+                              setShowFilterDropdown(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                          >
+                            Today
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDateFilter('week');
+                              setShowFilterDropdown(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                          >
+                            This Week
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDateFilter('month');
+                              setShowFilterDropdown(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                          >
+                            This Month
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDateFilter('custom');
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 border-t"
+                          >
+                            Custom Range
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom Date Range Inputs */}
+                {dateFilter === 'custom' && (
+                  <div className="flex gap-4 mt-4">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+                      <input
+                        type="date"
+                        value={customDateRange.start}
+                        onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                      <input
+                        type="date"
+                        value={customDateRange.end}
+                        onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Bills Content */}
+              <div className="p-6">
+                {loading ? (
+                <div className="text-center py-8">
+                    <p className="text-gray-500">Loading bills...</p>
+                  </div>
+                ) : filteredBills.length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg">
+                      No {activeSection === 'all' ? 'bills' : activeSection === 'draft' ? 'drafts' : activeSection + 's'} found
+                    </p>
+                    <p className="text-gray-400 text-sm mt-2">
+                      {searchTerm ? 'Try a different search term' : `Create your first ${activeSection === 'all' ? 'bill' : activeSection} using the form above`}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Amount
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Bill #
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Customer
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Date
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredBills.map((bill) => {
+                          const items = Array.isArray(bill?.BillItem) ? bill.BillItem : 
+                                        Array.isArray(bill?.items) ? bill.items : [];
+
+                          const subtotal = items.reduce(
+                            (sum, item) => sum + Number(item?.amount || 0),
+                            0
+                          );
+
+                          const grossAmount =
+                            subtotal +
+                            Number(bill?.labourCharges || 0) +
+                            Number(bill?.transportCharges || 0) +
+                            Number(bill?.otherCharges || 0);
+
+                          const cgstPercent = Number(bill?.cgstPercent || bill?.cgst || 0);
+                          const sgstPercent = Number(bill?.sgstPercent || bill?.sgst || 0);
+                          const igstPercent = Number(bill?.igstPercent || bill?.igst || 0);
+                          const tdsPercent = Number(bill?.tdsPercent || bill?.tds || 0);
+                          const retentionPercent = Number(bill?.retentionPercent || bill?.retention || 0);
+
+                          const cgst = (grossAmount * cgstPercent) / 100;
+                          const sgst = (grossAmount * sgstPercent) / 100;
+                          const igst = (grossAmount * igstPercent) / 100;
+
+                          const totalWithTax = grossAmount + cgst + sgst + igst;
+
+                          const tds = (totalWithTax * tdsPercent) / 100;
+                          const retention = (totalWithTax * retentionPercent) / 100;
+
+                          const netPayable =
+                            totalWithTax -
+                            tds -
+                            retention -
+                            Number(bill?.advancePaid || 0) +
+                            Number(bill?.previousBills || 0);
+
+                          const billId = bill._id || bill.id;
+                          const billNumber = bill.billId || bill.billNumber || 'N/A';
+                          const billType = bill.billType || 'invoice';
+
+                          return (
+                            <tr key={billId} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">
+                                  Rs. {netPayable.toFixed(2)}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <select
+                                  value={bill.status || 'open'}
+                                  onChange={(e) => handleUpdateStatus(billId, e.target.value)}
+                                  className={`text-xs font-semibold px-3 py-1 rounded-full border-0 cursor-pointer ${getStatusColor(bill.status || 'open')}`}
+                                >
+                                  <option value="open">Open</option>
+                                  <option value="sent">Sent</option>
+                                  <option value="paid">Paid</option>
+                                  <option value="draft">Draft</option>
+                                </select>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{billNumber}</div>
+                                <div className="text-xs text-gray-500">
+                                  {billType === 'quotation' ? 'Quotation' : 'Invoice'} - by {bill.companyName || 'N/A'}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">{bill.clientName || 'N/A'}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {new Date(bill.billDate).toLocaleDateString('en-IN', { 
+                                    day: '2-digit', 
+                                    month: 'short', 
+                                    year: 'numeric' 
+                                  })}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {new Date(bill.createdAt || bill.billDate).toLocaleTimeString('en-IN', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    hour12: true
+                                  })}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handlePrintBill(bill)}
+                                    className="text-gray-600 hover:text-gray-900"
+                                    title="View"
+                                  >
+                                    <Eye className="w-5 h-5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleEditBill(bill)}
+                                    className="text-blue-600 hover:text-blue-900"
+                                    title="Edit"
+                                  >
+                                    <Pencil className="w-5 h-5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteBill(billId)}
+                                    className="text-red-600 hover:text-red-900"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="w-5 h-5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Add Client Modal */}
+      {showClientModal && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm transition-opacity duration-300 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-800">Add New Client</h2>
+              <button
+                onClick={() => setShowClientModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Client Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newClient.clientName}
+                    onChange={(e) => setNewClient(prev => ({ ...prev, clientName: e.target.value }))}
+                    placeholder="Client/Company Name"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Client Address
+                  </label>
+                  <textarea
+                    value={newClient.clientAddress}
+                    onChange={(e) => setNewClient(prev => ({ ...prev, clientAddress: e.target.value }))}
+                    rows="3"
+                    placeholder="Full Address"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none resize-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    GST Number
+                  </label>
+                  <input
+                    type="text"
+                    value={newClient.clientGST}
+                    onChange={(e) => setNewClient(prev => ({ ...prev, clientGST: e.target.value }))}
+                    placeholder="29XXXXXXXXXXXXX"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={newClient.clientPhone}
+                    onChange={(e) => setNewClient(prev => ({ ...prev, clientPhone: e.target.value }))}
+                    placeholder="+91 XXXXX XXXXX"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={newClient.clientEmail}
+                    onChange={(e) => setNewClient(prev => ({ ...prev, clientEmail: e.target.value }))}
+                    placeholder="client@example.com"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] focus:border-transparent outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={handleAddClient}
+                  className="flex-1 bg-[#ffbe2a] text-black font-semibold py-2 px-4 rounded-lg hover:bg-[#e5ab26] transition-colors"
+                >
+                  Add Client
+                </button>
+                <button
+                  onClick={() => setShowClientModal(false)}
+                  className="flex-1 bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Bill Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm transition-opacity duration-300 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full my-8">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center rounded-t-lg z-10">
+              <h2 className="text-2xl font-bold text-gray-800">
+                Edit {formData.billType === 'invoice' ? 'Invoice' : 'Quotation'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingBill(null);
+                  resetForm();
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 max-h-[80vh] overflow-y-auto">
+              {/* Same form fields as main form */}
+              <div className="space-y-6">
+                {/* Bill Information */}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b-2 border-[#ffbe2a]">
+                    Bill Information
+                  </h3>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Bill Number
+                      </label>
+                      <input
+                        type="text"
+                        name="billNumber"
+                        value={formData.billNumber}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Date
+                      </label>
+                      <input
+                        type="date"
+                        name="billDate"
+                        value={formData.billDate}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] outline-none"
+                      />
+                    </div>
+                    {formData.billType === 'invoice' && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Due Date
+                        </label>
+                        <input
+                          type="date"
+                          name="dueDate"
+                          value={formData.dueDate}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] outline-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Client Information */}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b-2 border-[#ffbe2a]">
+                    Client Information
+                  </h3>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Client Name
+                      </label>
+                      <input
+                        type="text"
+                        name="clientName"
+                        value={formData.clientName}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Client GST
+                      </label>
+                      <input
+                        type="text"
+                        name="clientGST"
+                        value={formData.clientGST}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Project Information */}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b-2 border-[#ffbe2a]">
+                    Project Information
+                  </h3>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Project Name
+                      </label>
+                      <input
+                        type="text"
+                        name="projectName"
+                        value={formData.projectName}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Work Order No
+                      </label>
+                      <input
+                        type="text"
+                        name="workOrderNo"
+                        value={formData.workOrderNo}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ffbe2a] outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bill Items */}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b-2 border-[#ffbe2a]">
+                    Bill Items
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="px-2 py-2 text-left text-xs font-semibold border">S.No</th>
+                          <th className="px-2 py-2 text-left text-xs font-semibold border">Description</th>
+                          <th className="px-2 py-2 text-left text-xs font-semibold border">Unit</th>
+                          <th className="px-2 py-2 text-left text-xs font-semibold border">Qty</th>
+                          <th className="px-2 py-2 text-left text-xs font-semibold border">Rate</th>
+                          <th className="px-2 py-2 text-left text-xs font-semibold border">Amount</th>
+                          <th className="px-2 py-2 text-left text-xs font-semibold border">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {formData.items.map((item, index) => (
+                          <tr key={index}>
+                            <td className="px-2 py-2 border text-center">{item.sno}</td>
+                            <td className="px-2 py-2 border">
+                              <textarea
+                                value={item.description}
+                                onChange={(e) => handleItemChange(index, "description", e.target.value)}
+                                rows="2"
+                                className="w-full px-2 py-1 border rounded text-sm"
+                              />
+                            </td>
+                            <td className="px-2 py-2 border">
+                              <select
+                                value={item.unit}
+                                onChange={(e) => handleItemChange(index, "unit", e.target.value)}
+                                className="w-full px-2 py-1 border rounded text-sm"
+                              >
+                                {unitOptions.map((unit) => (
+                                  <option key={unit} value={unit}>{unit}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-2 py-2 border">
+                              <input
+                                type="number"
+                                value={item.quantity}
+                                onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
+                                className="w-20 px-2 py-1 border rounded text-sm"
+                              />
+                            </td>
+                            <td className="px-2 py-2 border">
+                              <input
+                                type="number"
+                                value={item.rate}
+                                onChange={(e) => handleItemChange(index, "rate", e.target.value)}
+                                className="w-24 px-2 py-1 border rounded text-sm"
+                              />
+                            </td>
+                            <td className="px-2 py-2 border">Rs. {item.amount.toFixed(2)}</td>
+                            <td className="px-2 py-2 border text-center">
+                              <button
+                                onClick={() => removeItem(index)}
+                                disabled={formData.items.length === 1}
+                                className={`px-2 py-1 text-xs rounded ${
+                                  formData.items.length === 1
+                                    ? "bg-gray-300 cursor-not-allowed"
+                                    : "bg-red-500 text-white hover:bg-red-600"
+                                }`}
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <button
+                    onClick={addItem}
+                    className="mt-3 px-4 py-2 bg-[#ffbe2a] text-black font-semibold rounded-lg hover:bg-[#e5ab26]"
+                  >
+                    + Add Item
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6 pt-6 border-t">
+                <button
+                  onClick={() => handleUpdateBill(false)}
+                  className="flex-1 bg-[#ffbe2a] text-black font-semibold py-2 px-4 rounded-lg hover:bg-[#e5ab26] transition-colors"
+                >
+                  Update Bill
+                </button>
+                <button
+                  onClick={() => handleUpdateBill(true)}
+                  className="flex-1 bg-gray-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors"
+                >
+                  Save as Draft
+                </button>
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingBill(null);
+                    resetForm();
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+export default Billing;
