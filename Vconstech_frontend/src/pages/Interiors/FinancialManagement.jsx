@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import {
   Edit2, Printer, Plus, Save, X, Trash2,
-  Eye, Search, Filter,
+  Eye, Search, Filter, ArrowUpDown,
   FileText, Building2, Download, FileSpreadsheet, FolderOpen, BarChart3, Coins, PieChart
 } from 'lucide-react';
 import Navbar from '../../components/common/Navbar';
@@ -38,7 +38,9 @@ const FinancialManagement = () => {
   const [loading, setLoading]                 = useState(true);
   const [searchQuery, setSearchQuery]         = useState('');
   const [showFilterDrop, setShowFilterDrop]   = useState(false);
+  const [showDateSortDrop, setShowDateSortDrop] = useState(false);
   const [filterStatus, setFilterStatus]       = useState('all');
+  const [dueDateRange, setDueDateRange]       = useState({ from: '', to: '' });
 
   /* pagination */
   const [currentPage, setCurrentPage]         = useState(1);
@@ -119,7 +121,16 @@ const FinancialManagement = () => {
   const filteredProjects = projects.filter((p) => {
     const matchSearch = String(p.name || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchFilter = filterStatus === 'all' || getProjectStatus(p) === filterStatus;
-    return matchSearch && matchFilter;
+    const dueDate = p.dueDate ? new Date(p.dueDate).toISOString().slice(0, 10) : '';
+    const matchFrom = !dueDateRange.from || (dueDate && dueDate >= dueDateRange.from);
+    const matchTo = !dueDateRange.to || (dueDate && dueDate <= dueDateRange.to);
+    return matchSearch && matchFilter && matchFrom && matchTo;
+  }).sort((a, b) => {
+    const dateA = a.dueDate ? new Date(a.dueDate).getTime() : NaN;
+    const dateB = b.dueDate ? new Date(b.dueDate).getTime() : NaN;
+    if (Number.isNaN(dateA)) return Number.isNaN(dateB) ? 0 : 1;
+    if (Number.isNaN(dateB)) return -1;
+    return dateA - dateB;
   });
 
   // The dashboard cards intentionally use the same result set as the table so
@@ -470,7 +481,7 @@ const FinancialManagement = () => {
             ))}
           </div>
 
-          {/* Search and status filter */}
+          {/* Search and filters */}
           <div className="mb-3 flex items-center gap-2">
             <div className="relative min-w-0 flex-1">
               <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
@@ -498,6 +509,39 @@ const FinancialManagement = () => {
                         {s === 'all' ? 'All Status' : s}
                       </button>
                     ))}
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="relative shrink-0">
+              <button onClick={() => setShowDateSortDrop((open) => !open)}
+                className={`flex h-10 items-center gap-2 rounded-lg border px-4 text-xs font-medium shadow-sm transition ${dueDateRange.from || dueDateRange.to ? 'border-yellow-400 bg-yellow-50 text-yellow-900' : 'border-[#e2e8f0] bg-white text-[#1f2937] hover:bg-gray-50'}`}>
+                <ArrowUpDown className="h-4 w-4" /> Sort By
+                {(dueDateRange.from || dueDateRange.to) && <span className="h-2 w-2 rounded-full bg-yellow-400" />}
+              </button>
+              {showDateSortDrop && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowDateSortDrop(false)} />
+                  <div className="absolute right-0 z-20 mt-2 w-64 space-y-3 rounded-xl border border-gray-100 bg-white p-4 text-sm shadow-lg">
+                    <p className="text-xs font-semibold text-gray-700">Due date range</p>
+                    <label className="block text-xs text-gray-500">
+                      From
+                      <input type="date" value={dueDateRange.from} max={dueDateRange.to || undefined}
+                        onChange={(e) => { setDueDateRange((range) => ({ ...range, from: e.target.value })); setCurrentPage(1); }}
+                        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700" />
+                    </label>
+                    <label className="block text-xs text-gray-500">
+                      To
+                      <input type="date" value={dueDateRange.to} min={dueDateRange.from || undefined}
+                        onChange={(e) => { setDueDateRange((range) => ({ ...range, to: e.target.value })); setCurrentPage(1); }}
+                        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700" />
+                    </label>
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={() => { setDueDateRange({ from: '', to: '' }); setCurrentPage(1); }}
+                        className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50">Clear</button>
+                      <button onClick={() => setShowDateSortDrop(false)}
+                        className="flex-1 rounded-lg bg-yellow-400 px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-yellow-500">Done</button>
+                    </div>
                   </div>
                 </>
               )}

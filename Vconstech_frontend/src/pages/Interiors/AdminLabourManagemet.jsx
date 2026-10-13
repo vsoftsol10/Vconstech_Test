@@ -1,11 +1,12 @@
 import { showToast } from '../../components/common/Toast';
 import React, { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import {
   Plus, X, IndianRupee, User, Phone, MapPin, Calendar, ClipboardCheck,
   Edit2, Eye, Trash2, Briefcase, FolderOpen, Search,
   ChevronLeft, ChevronRight, MoreVertical, Upload, Home, ChevronRight as ChevronRightIcon,
-  Filter
+  Filter, Loader2
 } from 'lucide-react'
 import labourApi from '../../api/labourAPI'
 import { projectAPI } from '../../api/projectAPI'
@@ -201,8 +202,11 @@ const ProjectHeaderFilter = ({ projects, selectedProjectFilter, onSelect }) => {
 }
 
 const AdminLabourManagement = () => {
+  const navigate = useNavigate()
   const [labourers, setLabourers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [busyAction, setBusyAction] = useState('')
+  const busyActionRef = useRef(false)
   const [projects, setProjects] = useState([])
   const [showAddForm, setShowAddForm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
@@ -222,6 +226,13 @@ const AdminLabourManagement = () => {
   const [showLabourUploadModal, setShowLabourUploadModal] = useState(false)
   const [selectedLabourFile, setSelectedLabourFile] = useState(null)
   const labourListInputRef = useRef(null)
+
+  const runBusyAction = async (key, action) => {
+    if (busyActionRef.current) return
+    busyActionRef.current = true
+    setBusyAction(key)
+    try { await action() } finally { busyActionRef.current = false; setBusyAction('') }
+  }
 
   const [newLabour, setNewLabour] = useState({ name: '', phone: '', address: '', designation: '', project: '', projectId: null })
   const [editLabour, setEditLabour] = useState({ id: null, name: '', phone: '', address: '', designation: '', project: '', projectId: null })
@@ -384,11 +395,8 @@ const AdminLabourManagement = () => {
 
   const openPaymentModal = (labour) => { setSelectedLabour(labour); setShowPaymentModal(true) }
   const openViewPaymentsModal = (labour) => { setSelectedLabour(labour); setShowViewPaymentsModal(true) }
-  const openEntryHistory = async (labour) => {
-    setSelectedLabour(labour); setShowEntryHistoryModal(true); setEntryHistoryLoading(true)
-    try { const data = await labourApi.getLabourAttendance(labour.id); setEntryHistory(data.data || []) }
-    catch (error) { setEntryHistory([]); showToast('Failed to load labour entry history: ' + error.message, 'error') }
-    finally { setEntryHistoryLoading(false) }
+  const openEntryHistory = (labour) => {
+    navigate(`/labor-management/labour-view/${labour.id}`, { state: { labour } })
   }
   const entryLabourers = labourEntry.projectId ? labourers.filter((labour) => String(labour.projectId || '') === String(labourEntry.projectId)) : []
   const saveLabourEntry = async (entryStatus) => {
@@ -550,9 +558,9 @@ const AdminLabourManagement = () => {
           </div> */}
 
           {/* ── Page header ── */}
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
             <h1 className="text-2xl font-bold leading-tight tracking-tight text-gray-900">Labour Management</h1>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => setShowLabourEntryForm(true)}
                 className="flex items-center gap-1.5 px-4 py-2.5 bg-yellow-400 hover:bg-yellow-500 text-black rounded-xl text-sm font-semibold transition-colors">
                 <ClipboardCheck size={16} /> Labour Entry
@@ -829,8 +837,8 @@ const AdminLabourManagement = () => {
               <div className="flex gap-3 mt-6">
                 <button onClick={() => { setShowAddForm(false); setLabourErrors({}) }}
                   className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition">Cancel</button>
-                <button onClick={handleAddLabour}
-                  className="flex-1 px-4 py-2.5 bg-yellow-400 text-black rounded-xl text-sm font-semibold hover:bg-yellow-500 transition">Add Labour</button>
+                <button onClick={() => runBusyAction('add', handleAddLabour)} disabled={!!busyAction}
+                  className="flex-1 px-4 py-2.5 bg-yellow-400 text-black rounded-xl text-sm font-semibold hover:bg-yellow-500 transition disabled:opacity-60 disabled:cursor-not-allowed">{busyAction === 'add' ? <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" /> Adding...</span> : 'Add Labour'}</button>
               </div>
             </div>
           </div>
@@ -850,8 +858,8 @@ const AdminLabourManagement = () => {
               <div className="flex gap-3 mt-6">
                 <button onClick={() => { setShowEditForm(false); setEditLabourErrors({}) }}
                   className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition">Cancel</button>
-                <button onClick={handleUpdateLabour}
-                  className="flex-1 px-4 py-2.5 bg-yellow-400 text-black rounded-xl text-sm font-semibold hover:bg-yellow-500 transition">Update Labour</button>
+                <button onClick={() => runBusyAction('update', handleUpdateLabour)} disabled={!!busyAction}
+                  className="flex-1 px-4 py-2.5 bg-yellow-400 text-black rounded-xl text-sm font-semibold hover:bg-yellow-500 transition disabled:opacity-60 disabled:cursor-not-allowed">{busyAction === 'update' ? <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" /> Updating...</span> : 'Update Labour'}</button>
               </div>
             </div>
           </div>
@@ -890,8 +898,8 @@ const AdminLabourManagement = () => {
               <div className="flex gap-3 pt-2">
                 <button onClick={() => { setShowPaymentModal(false); setSelectedLabour(null) }}
                   className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition">Cancel</button>
-                <button onClick={handleAddPayment}
-                  className="flex-1 px-4 py-2.5 bg-yellow-400 text-black rounded-xl text-sm font-semibold hover:bg-yellow-500 transition">Add Payment</button>
+                <button onClick={() => runBusyAction('payment', handleAddPayment)} disabled={!!busyAction}
+                  className="flex-1 px-4 py-2.5 bg-yellow-400 text-black rounded-xl text-sm font-semibold hover:bg-yellow-500 transition disabled:opacity-60 disabled:cursor-not-allowed">{busyAction === 'payment' ? <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" /> Saving...</span> : 'Add Payment'}</button>
               </div>
             </div>
           </div>
@@ -968,7 +976,7 @@ const AdminLabourManagement = () => {
               <section className="border border-gray-200 rounded-lg p-3 bg-gray-50"><h3 className="font-semibold text-sm mb-2">Cost Summary</h3>{(() => { const wage=Number(labourEntry.headWage)||0, rate=Number(labourEntry.helperRate)||0, full=Number(labourEntry.fullHelpers)||0, half=Number(labourEntry.halfHelpers)||0, head=labourEntry.headDayType==='HALF_DAY'?wage*.5:wage, total=head+full*rate+half*rate*.5; return <div className="text-xs space-y-1"><p className="flex justify-between"><span>Head</span><span>₹{head.toLocaleString()}</span></p><p className="flex justify-between"><span>Full helpers</span><span>₹{(full*rate).toLocaleString()}</span></p><p className="flex justify-between"><span>Half helpers</span><span>₹{(half*rate*.5).toLocaleString()}</span></p><p className="flex justify-between border-t pt-2 font-bold text-sm"><span>Total</span><span>₹{total.toLocaleString()}</span></p></div> })()}</section>
               <section className="border border-gray-200 rounded-lg p-3"><h3 className="font-semibold text-sm mb-2">Notes</h3><textarea value={labourEntry.notes} onChange={(e) => setLabourEntry((v) => ({ ...v, notes: e.target.value }))} rows="2" placeholder="Optional notes" className="w-full border rounded px-2 py-1.5 text-sm resize-none" /></section>
             </div>
-            <div className="flex gap-3 mt-5"><button onClick={() => saveLabourEntry('DRAFT')} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm">Save draft</button><button onClick={() => saveLabourEntry('SUBMITTED')} className="flex-1 px-4 py-2 bg-yellow-400 hover:bg-yellow-500 rounded-lg text-sm font-semibold">Submit to Admin</button></div>
+            <div className="flex flex-col sm:flex-row gap-3 mt-5"><button onClick={() => runBusyAction('entry', () => saveLabourEntry('DRAFT'))} disabled={!!busyAction} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-60">{busyAction === 'entry' ? 'Saving...' : 'Save draft'}</button><button onClick={() => runBusyAction('entry', () => saveLabourEntry('SUBMITTED'))} disabled={!!busyAction} className="flex-1 px-4 py-2 bg-yellow-400 hover:bg-yellow-500 rounded-lg text-sm font-semibold disabled:opacity-60">{busyAction === 'entry' ? 'Submitting...' : 'Submit to Admin'}</button></div>
           </div>
         </div>
       )}

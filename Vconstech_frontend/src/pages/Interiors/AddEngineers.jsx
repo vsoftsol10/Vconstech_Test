@@ -291,7 +291,7 @@ const AddEngineers = () => {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to fetch salary history");
+      if (!response.ok) throw new Error([data.error || "Failed to fetch salary history", data.details].filter(Boolean).join(": "));
       setSalaryHistory(data.salaries || []);
     } catch (error) {
       setSalaryHistory([]);
@@ -321,7 +321,7 @@ const AddEngineers = () => {
         body: JSON.stringify(salary),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to add salary");
+      if (!response.ok) throw new Error([data.error || "Failed to add salary", data.details].filter(Boolean).join(": "));
       showToast("Salary added successfully!", "success");
       return true;
     } catch (error) {

@@ -426,6 +426,8 @@ import { focusFirstInvalidField, validateFields } from "../../utils/formValidati
 // How many files upload at the same time. 4-6 is a good balance: fast, but
 // doesn't flood the browser/server with dozens of simultaneous connections.
 const MAX_CONCURRENT_UPLOADS = 1;
+const MIN_UPLOAD_FILE_SIZE = 1;
+const MAX_UPLOAD_FILE_SIZE = 100 * 1024 * 1024;
 
 const UploadFilesModal = ({
   selectedProject,
@@ -514,6 +516,24 @@ const UploadFilesModal = ({
           ? `Skipped ${skipped} file(s) inside node_modules, .git, dist, build, etc.`
           : ""
       );
+    }
+
+    const invalidSizeFiles = newFiles.filter((file) => (
+      file.size < MIN_UPLOAD_FILE_SIZE || file.size > MAX_UPLOAD_FILE_SIZE
+    ));
+    if (invalidSizeFiles.length > 0) {
+      const examples = invalidSizeFiles.slice(0, 3).map((file) => file.name).join(", ");
+      const remainingCount = invalidSizeFiles.length - 3;
+      showErrorMessage(
+        `Each file must be between 1 byte and 100 MB. ${examples}${remainingCount > 0 ? ` and ${remainingCount} more` : ""} ${invalidSizeFiles.length === 1 ? "was" : "were"} skipped.`
+      );
+      newFiles = newFiles.filter((file) => (
+        file.size >= MIN_UPLOAD_FILE_SIZE && file.size <= MAX_UPLOAD_FILE_SIZE
+      ));
+    }
+    if (newFiles.length === 0) {
+      e.target.value = "";
+      return;
     }
 
     setFileFormData((prev) => {
@@ -892,6 +912,9 @@ const UploadFilesModal = ({
               </div>
               <p className="text-xs text-gray-400 mt-4">
                 PDF, DOC, DOCX, JPG, PNG, XLSX, DWG, DXF supported
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                File size per item: 1 byte minimum, 100 MB maximum.
               </p>
               {fileFormData.files.length > 0 && (
                 <p className="text-xs text-gray-400 mt-1">

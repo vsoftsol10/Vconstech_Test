@@ -469,7 +469,11 @@ router.get('/:id/salaries', authenticateToken, async (req, res) => {
     res.json({ success: true, salaries });
   } catch (error) {
     console.error('Error fetching engineer salaries:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch salary history' });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch salary history',
+      ...(process.env.NODE_ENV !== 'production' ? { details: error.message } : {}),
+    });
   }
 });
 
@@ -518,7 +522,11 @@ router.post('/:id/salaries', authenticateToken, async (req, res) => {
     res.status(201).json({ success: true, message: 'Salary added successfully', salary });
   } catch (error) {
     console.error('Error adding engineer salary:', error);
-    res.status(500).json({ success: false, error: 'Failed to add salary' });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add salary',
+      ...(process.env.NODE_ENV !== 'production' ? { details: error.message } : {}),
+    });
   }
 });
 

@@ -2,10 +2,37 @@
 import { prisma } from '../config/database.js';
 
 // Get all labourers for a company
-export const getAllLabourers = async (companyId, projectId = null) => {
+export const getEngineerAssignedProjectIds = async (companyId, engineerId) => {
+  const projects = await prisma.project.findMany({
+    where: { companyId, assignedEngineerId: Number.parseInt(engineerId, 10) },
+    select: { id: true }
+  })
+  return projects.map(({ id }) => id)
+}
+
+export const isLabourAssignedToEngineer = async (labourId, companyId, engineerId) => {
+  const projectIds = await getEngineerAssignedProjectIds(companyId, engineerId)
+  if (!projectIds.length) return false
+  const labour = await prisma.labour.findFirst({
+    where: { id: labourId, companyId, projectId: { in: projectIds } },
+    select: { id: true }
+  })
+  return Boolean(labour)
+}
+
+export const isProjectAssignedToEngineer = async (projectId, companyId, engineerId) => {
+  const projectIds = await getEngineerAssignedProjectIds(companyId, engineerId)
+  return projectIds.includes(Number.parseInt(projectId, 10))
+}
+
+export const getAllLabourers = async (companyId, projectId = null, engineerId = null) => {
   const where = { companyId };
-  
-  if (projectId) {
+
+  if (engineerId != null) {
+    const assignedProjectIds = await getEngineerAssignedProjectIds(companyId, engineerId)
+    if (!assignedProjectIds.length) return []
+    where.projectId = { in: assignedProjectIds }
+  } else if (projectId) {
     where.projectId = parseInt(projectId);
   }
 

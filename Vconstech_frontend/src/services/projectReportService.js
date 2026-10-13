@@ -185,6 +185,10 @@ const normalizeReportData = (report = {}) => {
     projects,
     featuredProject,
     projectMaterials: toArray(report.projectMaterials),
+    materialUsages: toArray(report.materialUsages),
+    projectContracts: toArray(report.projectContracts),
+    labourEntries: toArray(report.labourEntries),
+    projectBreakdowns: toArray(report.projectBreakdowns),
     financialExpenses,
     dailyUpdates: toArray(report.dailyUpdates),
     teamMembers: toArray(report.teamMembers),
@@ -608,6 +612,36 @@ const buildMaterialRows = (materials) => materials.map((item) => {
   ];
 });
 
+const buildMaterialUsageRows = (usages) => usages.map((usage) => [
+  textValue(usage.material?.name || usage.materialName || usage.name),
+  formatOptionalQuantity(usage.quantity || 0),
+  textValue(usage.material?.unit || usage.unit),
+  formatDate(usage.date || usage.createdAt),
+  textValue(usage.engineer?.name || usage.engineerName),
+  textValue(usage.remarks || usage.notes),
+]);
+
+const buildContractRows = (contracts) => contracts.map((contract) => [
+  textValue(contract.contractorName),
+  textValue(contract.details),
+  money(contract.contractAmount),
+  money(contract.paidAmount),
+  textValue(contract.workStatus),
+  formatDate(contract.startDate),
+  formatDate(contract.endDate),
+]);
+
+const buildLabourRows = (entries) => entries.map(({ labour = {}, attendance = {} }) => [
+  textValue(labour.name),
+  textValue(labour.designation),
+  formatDate(attendance.attendanceDate),
+  attendance.headDayType === 'HALF_DAY' ? 'Half Day' : 'Full Day',
+  formatQuantity(attendance.fullHelpers || 0),
+  formatQuantity(attendance.halfHelpers || 0),
+  money(attendance.totalAmount),
+  textValue(attendance.entryStatus),
+]);
+
 const getMaterialUsageSummary = (materials) => (
   materials.reduce((summary, item) => {
     const material = item.material || item;
@@ -664,7 +698,7 @@ const drawSingleProjectReport = (report, logoDataUrl = null) => {
   const progress = clampPercent(project.progress);
   const ctx = createPdfContext('portrait');
 
-  drawHeader(ctx, 'Material Allocation Report', getProjectName(project), normalized.generatedAtText, normalized.company, logoDataUrl);
+  drawHeader(ctx, 'Project Report', getProjectName(project), normalized.generatedAtText, normalized.company, logoDataUrl);
   drawMetricCards(ctx, [
     { label: 'Project Name', value: getProjectName(project) },
     { label: 'Total Entries', value: materialSummary.totalEntries },
@@ -731,6 +765,9 @@ const drawSingleProjectReport = (report, logoDataUrl = null) => {
       },
     }
   );
+  drawTable(ctx, 'Material Usage History', ['Material', 'Quantity', 'Unit', 'Date', 'Recorded By', 'Notes'], buildMaterialUsageRows(normalized.materialUsages), 'No usage records', { error: normalized.sectionErrors.materialUsages, fontSize: 8 });
+  drawTable(ctx, 'Contract Details', ['Contractor', 'Work Details', 'Amount', 'Paid', 'Status', 'Start Date', 'End Date'], buildContractRows(normalized.projectContracts), 'No contracts', { error: normalized.sectionErrors.projectContracts, fontSize: 8 });
+  drawTable(ctx, 'Labour Usage', ['Labourer', 'Role', 'Date', 'Day Type', 'Full Helpers', 'Half Helpers', 'Total', 'Status'], buildLabourRows(normalized.labourEntries), 'No labour entries', { error: normalized.sectionErrors.labourEntries, fontSize: 8 });
   drawTable(ctx, 'Expense History', ['Expense', 'Category', 'Amount', 'Status', 'Date'], buildExpenseRows(expenses), 'No records', { error: normalized.sectionErrors.financialExpenses });
   drawTable(ctx, 'Team Members', ['Name', 'Role', 'Contact'], buildTeamRows(normalized.teamMembers), 'No records', { error: normalized.sectionErrors.projectDetails });
   drawTable(ctx, 'Daily Updates', ['Date', 'Update', 'Updated By'], buildDailyUpdateRows(normalized.dailyUpdates), 'No records', { error: normalized.sectionErrors.dailyUpdates });
@@ -808,19 +845,24 @@ const drawAllProjectsReport = (report, logoDataUrl = null) => {
     }
   );
 
-  if (normalized.featuredProject && getProjectId(normalized.featuredProject)) {
-    drawKeyValueTable(ctx, 'Featured Project Information', [
-      ['Project', getProjectName(normalized.featuredProject), 'Customer', getClientName(normalized.featuredProject)],
-      ['Timeline', `${formatDate(normalized.featuredProject.startDate)} to ${formatDate(normalized.featuredProject.endDate)}`, 'Engineer', getEngineerName(normalized.featuredProject)],
+  const projectBreakdowns = normalized.projectBreakdowns.length
+    ? normalized.projectBreakdowns
+    : (normalized.featuredProject && getProjectId(normalized.featuredProject)
+      ? [{ project: normalized.featuredProject, materials: normalized.projectMaterials, materialUsages: normalized.materialUsages, contracts: normalized.projectContracts, labourEntries: normalized.labourEntries }]
+      : []);
+
+  projectBreakdowns.forEach(({ project, materials = [], materialUsages = [], contracts = [], labourEntries = [] }) => {
+    drawKeyValueTable(ctx, `${getProjectName(project)} Details`, [
+      ['Project', getProjectName(project), 'Customer', getClientName(project)],
+      ['Timeline', `${formatDate(project.startDate)} to ${formatDate(project.endDate)}`, 'Engineer', getEngineerName(project)],
     ]);
     drawTable(
       ctx,
-      'Featured Project Material Allocations',
+      `${getProjectName(project)} Material Allocations`,
       ['Material', 'Category', 'Assigned', 'Used', 'Unit', 'Rate (INR)', 'Cost (INR)', 'Date'],
-      buildMaterialRows(normalized.projectMaterials),
+      buildMaterialRows(materials),
       'No records',
       {
-        error: normalized.sectionErrors.projectMaterials,
         columnStyles: {
           2: { halign: 'center' },
           3: { halign: 'center' },
@@ -830,12 +872,29 @@ const drawAllProjectsReport = (report, logoDataUrl = null) => {
         },
       }
     );
-    drawTable(ctx, 'Featured Project Expenses', ['Expense', 'Category', 'Amount', 'Status', 'Date'], buildExpenseRows(normalized.financialExpenses), 'No records', { error: normalized.sectionErrors.financialExpenses });
-    drawTable(ctx, 'Featured Project Daily Updates', ['Date', 'Update', 'Updated By'], buildDailyUpdateRows(normalized.dailyUpdates), 'No records', { error: normalized.sectionErrors.dailyUpdates });
-  }
+    drawTable(ctx, `${getProjectName(project)} Material Usage`, ['Material', 'Quantity', 'Unit', 'Date', 'Recorded By', 'Notes'], buildMaterialUsageRows(materialUsages), 'No usage records', { fontSize: 8 });
+    drawTable(ctx, `${getProjectName(project)} Contracts`, ['Contractor', 'Work Details', 'Amount', 'Paid', 'Status', 'Start Date', 'End Date'], buildContractRows(contracts), 'No contracts', { fontSize: 8 });
+    drawTable(ctx, `${getProjectName(project)} Labour Entries`, ['Labourer', 'Role', 'Date', 'Day Type', 'Full Helpers', 'Half Helpers', 'Total', 'Status'], buildLabourRows(labourEntries), 'No labour entries', { fontSize: 8 });
+  });
 
   addFooter(ctx.doc, normalized.generatedAtText);
   return ctx.doc;
+};
+
+const fetchProjectLabourEntries = async (projectId, authToken) => {
+  const labourResponse = await fetchJson(authToken, `${API_BASE_URL}/labours/project/${projectId}`);
+  const labourers = toArray(labourResponse.data || labourResponse.labourers);
+  const attendanceGroups = await Promise.all(labourers.map(async (labour) => {
+    try {
+      const response = await fetchJson(authToken, `${API_BASE_URL}/labours/${labour.id}/attendance`);
+      return toArray(response.data).filter((attendance) => !attendance.projectId || String(attendance.projectId) === String(projectId))
+        .map((attendance) => ({ labour, attendance }));
+    } catch (error) {
+      console.warn(`Could not load attendance for labourer ${labour.id}:`, error);
+      return [];
+    }
+  }));
+  return attendanceGroups.flat();
 };
 
 const buildSingleProjectReportData = async (project) => {
@@ -845,16 +904,19 @@ const buildSingleProjectReportData = async (project) => {
   const selectedProjectId = getProjectId(project);
   if (!selectedProjectId) throw new Error('Project ID is missing. Cannot generate report.');
 
-  const [projectDetailsResult, financialResult, projectMaterialsResult, dailyUpdatesResult] = await Promise.all([
+  const [projectDetailsResult, financialResult, projectMaterialsResult, dailyUpdatesResult, contractsResult, labourResult] = await Promise.all([
     safeFetch('Project details', () => fetchJson(authToken, `${API_BASE_URL}/projects/${selectedProjectId}`)),
     safeFetch('Financial expenses', () => fetchJson(authToken, `${API_BASE_URL}/financial/projects/${selectedProjectId}`)),
     safeFetch('Material allocations', () => fetchJson(authToken, `${API_BASE_URL}/project-materials/${selectedProjectId}`)),
     safeFetch('Daily updates', () => fetchJson(authToken, `${API_BASE_URL}/daily-progress/project/${selectedProjectId}`)),
+    safeFetch('Project contracts', () => fetchJson(authToken, `${API_BASE_URL}/contracts/project/${selectedProjectId}`)),
+    safeFetch('Labour entries', () => fetchProjectLabourEntries(selectedProjectId, authToken)),
   ]);
   const projectDetailsRaw = projectDetailsResult.data;
   const financialRaw = financialResult.data;
   const projectMaterialsRaw = projectMaterialsResult.data;
   const dailyUpdatesRaw = dailyUpdatesResult.data;
+  const contractsRaw = contractsResult.data;
 
   const fullProject = {
     ...project,
@@ -878,6 +940,8 @@ const buildSingleProjectReportData = async (project) => {
     ?? projectMaterialsRaw.data
     ?? fullProject.projectMaterials
   );
+  const materialUsages = toArray(fullProject.materialUsages);
+  const projectContracts = toArray(contractsRaw.contracts || fullProject.contracts);
   const dailyUpdates = toArray(dailyUpdatesRaw.dailyUpdates || dailyUpdatesRaw.updates || dailyUpdatesRaw.data);
   const teamMembers = toArray(fullProject.teamMembers || fullProject.assignedEmployees);
   const assignedEngineer = fullProject.assignedEngineer || projectDetailsRaw.project?.assignedEngineer || project.assignedEngineer;
@@ -898,6 +962,9 @@ const buildSingleProjectReportData = async (project) => {
     featuredProject: fullProject,
     company: fullProject.company,
     projectMaterials,
+    materialUsages,
+    projectContracts,
+    labourEntries: toArray(labourResult.data),
     financialExpenses: expenses,
     dailyUpdates,
     teamMembers,
@@ -910,8 +977,10 @@ const buildSingleProjectReportData = async (project) => {
       financialExpenses: financialResult.error,
       projectMaterials: projectMaterialsResult.error,
       dailyUpdates: dailyUpdatesResult.error,
+      projectContracts: contractsResult.error,
+      labourEntries: labourResult.error,
     },
-    failedSections: [projectDetailsResult, financialResult, projectMaterialsResult, dailyUpdatesResult]
+    failedSections: [projectDetailsResult, financialResult, projectMaterialsResult, dailyUpdatesResult, contractsResult, labourResult]
       .filter((result) => result.error)
       .map(({ label, error }) => ({ label, error })),
   });
@@ -931,24 +1000,43 @@ const projectReportService = {
 
       const featuredProject = projects[0] || {};
       const featuredProjectId = getProjectId(featuredProject);
-      const [financialRaw, projectMaterialsRaw, dailyUpdatesRaw] = await Promise.all([
+      const [financialRaw, dailyUpdatesRaw] = await Promise.all([
         featuredProjectId
           ? fetchJson(authToken, `${API_BASE_URL}/financial/projects/${featuredProjectId}`)
           : Promise.resolve({ project: { expenses: [] } }),
-        featuredProjectId
-          ? fetchJson(authToken, `${API_BASE_URL}/project-materials/${featuredProjectId}`)
-          : Promise.resolve({ projectMaterials: [], materials: [], data: [] }),
         featuredProjectId
           ? fetchJson(authToken, `${API_BASE_URL}/daily-progress/project/${featuredProjectId}`)
           : Promise.resolve({ dailyUpdates: [], updates: [], data: [] }),
       ]);
 
+      const projectBreakdowns = await Promise.all(projects.map(async (project) => {
+        const projectId = getProjectId(project);
+        if (!projectId) return { project, materials: [], materialUsages: [], contracts: [], labourEntries: [] };
+        const [detailsResult, labourResult] = await Promise.all([
+          safeFetch(`${getProjectName(project)} details`, () => fetchJson(authToken, `${API_BASE_URL}/projects/${projectId}`)),
+          safeFetch(`${getProjectName(project)} labour`, () => fetchProjectLabourEntries(projectId, authToken)),
+        ]);
+        const fullProject = { ...project, ...(detailsResult.data.project || detailsResult.data.data || {}) };
+        return {
+          project: fullProject,
+          materials: toArray(fullProject.projectMaterials),
+          materialUsages: toArray(fullProject.materialUsages),
+          contracts: toArray(fullProject.contracts),
+          labourEntries: toArray(labourResult.data),
+        };
+      }));
+
       const featuredFinancial = financialRaw.project || financialRaw.data || {};
+      const featuredBreakdown = projectBreakdowns.find(({ project }) => String(getProjectId(project)) === String(featuredProjectId)) || {};
       const report = normalizeReportData({
         generatedAtText: formatDateTime(),
         projects,
         featuredProject,
-        projectMaterials: projectMaterialsRaw.projectMaterials || projectMaterialsRaw.materials || projectMaterialsRaw.data,
+        projectBreakdowns,
+        projectMaterials: featuredBreakdown.materials,
+        materialUsages: featuredBreakdown.materialUsages,
+        projectContracts: featuredBreakdown.contracts,
+        labourEntries: featuredBreakdown.labourEntries,
         financialExpenses: featuredFinancial.expenses || financialRaw.expenses,
         dailyUpdates: dailyUpdatesRaw.dailyUpdates || dailyUpdatesRaw.updates || dailyUpdatesRaw.data,
         teamMembers: featuredProject.assignedEngineer ? [featuredProject.assignedEngineer] : [],

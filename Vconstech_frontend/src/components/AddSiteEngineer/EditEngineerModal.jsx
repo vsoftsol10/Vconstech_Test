@@ -22,19 +22,7 @@ const EditEngineerModal = ({ isOpen, onClose, onSubmit, isSubmitting, engineer }
 
   useEffect(() => {
     if (engineer) {
-      //  EXTENSIVE DEBUGGING
-      console.log('=== EDIT ENGINEER MODAL DEBUG ===');
-      console.log('Full engineer object:', engineer);
-      console.log('plainPassword field:', engineer.plainPassword);
-      console.log('password field:', engineer.password);
-      console.log('username field:', engineer.username);
-      console.log('All engineer keys:', Object.keys(engineer));
-      console.log('================================');
-      
-      // Try multiple possible password field names
       const passwordValue = engineer.plainPassword || engineer.password_plain || engineer.originalPassword || '';
-      
-      console.log('Password value being set:', passwordValue ? '***EXISTS***' : 'EMPTY/NULL');
       
       setFormData({
         name: engineer.name || '',

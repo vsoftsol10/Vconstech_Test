@@ -169,7 +169,8 @@
       const companyId = req.user.companyId;
       const { projectId } = req.query;
       
-      const labourers = await labourService.getAllLabourers(companyId, projectId);
+      const engineerId = req.user.type === 'engineer' ? (req.user.engineerId || req.user.id) : null;
+      const labourers = await labourService.getAllLabourers(companyId, projectId, engineerId);
       
       res.json({
         success: true,
@@ -193,6 +194,12 @@
       const companyId = req.user.companyId;
       
       const labourer = await labourService.getLabourerById(parseInt(id), companyId);
+
+      if (req.user.type === 'engineer' && !await labourService.isLabourAssignedToEngineer(
+        parseInt(id), companyId, req.user.engineerId || req.user.id
+      )) {
+        return res.status(404).json({ success: false, error: 'Labourer not found' });
+      }
       
       if (!labourer) {
         return res.status(404).json({
@@ -422,6 +429,11 @@
 
   export const getLabourAttendance = async (req, res) => {
     try {
+      if (req.user.type === 'engineer' && !await labourService.isLabourAssignedToEngineer(
+        parseInt(req.params.id, 10), req.user.companyId, req.user.engineerId || req.user.id
+      )) {
+        return res.status(404).json({ success: false, error: 'Labourer not found' });
+      }
       const attendance = await labourService.getLabourAttendance(parseInt(req.params.id, 10), req.user.companyId);
       res.json({ success: true, data: attendance });
     } catch (error) {
@@ -435,6 +447,12 @@
     try {
       const { id } = req.params;
       const companyId = req.user.companyId;
+
+      if (req.user.type === 'engineer' && !await labourService.isLabourAssignedToEngineer(
+        parseInt(id, 10), companyId, req.user.engineerId || req.user.id
+      )) {
+        return res.status(404).json({ success: false, error: 'Labourer not found' });
+      }
       
       const payments = await labourService.getLabourerPayments(
         parseInt(id), 
@@ -502,6 +520,12 @@
     try {
       const { projectId } = req.params;
       const companyId = req.user.companyId;
+
+      if (req.user.type === 'engineer' && !await labourService.isProjectAssignedToEngineer(
+        projectId, companyId, req.user.engineerId || req.user.id
+      )) {
+        return res.status(404).json({ success: false, error: 'Project not found' });
+      }
       
       const labourers = await labourService.getLabourersByProject(
         parseInt(projectId), 
