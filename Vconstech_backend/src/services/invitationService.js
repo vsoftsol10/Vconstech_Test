@@ -19,6 +19,7 @@ const normalizeText = (value) => String(value || '').trim();
 
 const getInvitationCustomer = (invitation) => {
   const customerPayload = invitation.requestPayload?.customer || {};
+  const customPlan = invitation.requestPayload?.customPlan || {};
 
   return {
     clientId: invitation.client.id,
@@ -31,15 +32,22 @@ const getInvitationCustomer = (invitation) => {
     city: pickFirst(customerPayload.city, customerPayload.location),
     subscriptionPlan: pickFirst(
       customerPayload.subscriptionPlan,
+      customPlan.plan,
       invitation.requestPayload?.pricingPurchase?.plan,
       invitation.requestPayload?.plan
     ),
     employeeCount: pickFirst(
       customerPayload.employeeCount,
       customerPayload.customMembers,
+      customPlan.customMembers,
       invitation.requestPayload?.customMembers,
       invitation.requestPayload?.pricingPurchase?.customMembers
-    )
+    ),
+    customMembers: pickFirst(customerPayload.customMembers, customPlan.customMembers),
+    customProjectLimit: pickFirst(customerPayload.customProjectLimit, customPlan.customProjectLimit),
+    customTemplateLimit: pickFirst(customerPayload.customTemplateLimit, customPlan.customTemplateLimit),
+    customPrice: pickFirst(customerPayload.customPrice, customPlan.customPrice),
+    gstRate: pickFirst(customerPayload.gstRate, customPlan.gstRate)
   };
 };
 
@@ -231,7 +239,14 @@ const toPublicInvitation = (invitation) => {
     status: invitation.status,
     crmLeadId: invitation.crmLeadId,
     crmCustomerId: invitation.crmCustomerId,
-    customer
+    customer,
+    customPlan: {
+      customMembers: customer.customMembers,
+      customProjectLimit: customer.customProjectLimit,
+      customTemplateLimit: customer.customTemplateLimit,
+      customPrice: customer.customPrice,
+      gstRate: customer.gstRate
+    }
   };
 };
 
@@ -379,6 +394,24 @@ export const registerInvitationAccount = async ({ invitationId, input }) => {
   const employeeCount = invitedCustomer.employeeCount
     ? Number(invitedCustomer.employeeCount)
     : null;
+  const customMembers = invitedCustomer.customMembers == null ? null : Number(invitedCustomer.customMembers);
+  const customProjectLimit = invitedCustomer.customProjectLimit == null ? null : Number(invitedCustomer.customProjectLimit);
+  const customTemplateLimit = invitedCustomer.customTemplateLimit == null ? null : Number(invitedCustomer.customTemplateLimit);
+  const customPrice = invitedCustomer.customPrice == null ? null : Number(invitedCustomer.customPrice);
+
+  if (selectedPackage === 'Advanced') {
+    const details = {};
+    if (!Number.isInteger(customMembers) || customMembers <= 0) details.customMembers = 'Must be a positive integer';
+    if (!Number.isInteger(customProjectLimit) || customProjectLimit <= 0) details.customProjectLimit = 'Must be a positive integer';
+    if (!Number.isInteger(customTemplateLimit) || customTemplateLimit < 1 || customTemplateLimit > 10) details.customTemplateLimit = 'Must be an integer from 1 to 10';
+    if (!Number.isFinite(customPrice) || customPrice <= 0) details.customPrice = 'Must be greater than zero';
+    if (Object.keys(details).length) {
+      const error = new Error('Invitation has invalid Advanced plan customizations');
+      error.statusCode = 400;
+      error.details = details;
+      throw error;
+    }
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     const locked = await tx.crmInvitation.updateMany({
@@ -428,7 +461,10 @@ export const registerInvitationAccount = async ({ invitationId, input }) => {
         erpCustomerId: invitation.erpCustomerId,
         accountStatus: 'ACTIVE',
         package: selectedPackage,
-        customMembers: Number.isFinite(employeeCount) ? employeeCount : null,
+        customMembers: selectedPackage === 'Advanced' ? customMembers : (Number.isFinite(employeeCount) ? employeeCount : null),
+        customProjectLimit: selectedPackage === 'Advanced' ? customProjectLimit : null,
+        customTemplateLimit: selectedPackage === 'Advanced' ? customTemplateLimit : null,
+        customPrice: selectedPackage === 'Advanced' ? customPrice : null,
         subscriptionPlan: selectedPlan || null
       },
       select: {
@@ -441,7 +477,11 @@ export const registerInvitationAccount = async ({ invitationId, input }) => {
         crmLeadId: true,
         crmCustomerId: true,
         erpCustomerId: true,
-        isActive: true
+          isActive: true,
+          customMembers: true,
+          customProjectLimit: true,
+          customTemplateLimit: true,
+          customPrice: true
       }
     });
 

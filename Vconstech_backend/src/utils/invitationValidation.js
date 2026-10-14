@@ -6,6 +6,9 @@ const EMAIL_PATTERN = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
 
 export const validateInvitationPayload = (payload = {}) => {
   const customer = payload.customer || {};
+  const customPlan = payload.customPlan || {};
+  const plan = customer.subscriptionPlan || customPlan.plan || payload.pricingPurchase?.plan || payload.plan;
+  const getCustom = (field) => customer[field] ?? customPlan[field];
 
   const values = {
     source: normalizeString(payload.source || 'CRM'),
@@ -39,6 +42,17 @@ export const validateInvitationPayload = (payload = {}) => {
 
   if (values.customer.email && !EMAIL_PATTERN.test(values.customer.email)) {
     errors.customerEmail = 'Customer email is invalid';
+  }
+
+  if (String(plan || '').trim().toLowerCase() === 'advanced') {
+    for (const field of ['customMembers', 'customProjectLimit']) {
+      const value = getCustom(field);
+      if (!Number.isInteger(Number(value)) || Number(value) <= 0) errors[field] = `${field} must be a positive integer for Advanced`;
+    }
+    const templates = Number(getCustom('customTemplateLimit'));
+    if (!Number.isInteger(templates) || templates < 1 || templates > 10) errors.customTemplateLimit = 'customTemplateLimit must be an integer from 1 to 10 for Advanced';
+    const price = Number(getCustom('customPrice'));
+    if (!Number.isFinite(price) || price <= 0) errors.customPrice = 'customPrice must be greater than zero for Advanced';
   }
 
   return {
