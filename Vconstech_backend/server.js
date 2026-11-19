@@ -71,6 +71,23 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 
 const app = express();
+
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+
+  res.on('finish', () => {
+    console.log(JSON.stringify({
+      type: 'request_timing',
+      method: req.method,
+      path: req.originalUrl,
+      status: res.statusCode,
+      durationMs: Date.now() - startedAt,
+    }));
+  });
+
+  next();
+});
+
 const PORT = process.env.PORT || 5001;
 
 app.use('/webhook', webhookRoute);
