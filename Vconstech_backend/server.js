@@ -48,6 +48,7 @@ import { scheduleTrialExpiryJob } from './src/services/subscriptionSyncService.j
 
 import { authenticateToken, authorizeRole } from './src/middlewares/authMiddlewares.js';
 import { prisma } from './src/config/database.js';
+import { requestTimingContext } from './src/config/requestTimingContext.js';
 
 // ES module dirname workaround
 const __filename = fileURLToPath(import.meta.url);
@@ -58,19 +59,21 @@ dotenv.config();
 const app = express();
 
 app.use((req, res, next) => {
-  const startedAt = Date.now();
+  requestTimingContext.run({ method: req.method, path: req.originalUrl }, () => {
+    const startedAt = Date.now();
 
-  res.on('finish', () => {
-    console.log(JSON.stringify({
-      type: 'request_timing',
-      method: req.method,
-      path: req.originalUrl,
-      status: res.statusCode,
-      durationMs: Date.now() - startedAt,
-    }));
+    res.on('finish', () => {
+      console.log(JSON.stringify({
+        type: 'request_timing',
+        method: req.method,
+        path: req.originalUrl,
+        status: res.statusCode,
+        durationMs: Date.now() - startedAt,
+      }));
+    });
+
+    next();
   });
-
-  next();
 });
 
 const PORT = process.env.PORT || 5001;
