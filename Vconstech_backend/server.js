@@ -26,6 +26,22 @@ import testRoutes from './src/routes/test.js';
 
 import reportRoute from './src/routes/reportRoutes.js';
 
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+
+  res.on('finish', () => {
+    console.log(JSON.stringify({
+      type: 'request_timing',
+      method: req.method,
+      path: req.originalUrl,
+      status: res.statusCode,
+      durationMs: Date.now() - startedAt,
+    }));
+  });
+
+  next();
+});
+
 // ✅ Financial Management Routes
 import financialRoutes from './src/routes/financialRoutes.js';
 
