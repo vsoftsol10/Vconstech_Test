@@ -17,10 +17,14 @@ prisma.$on('query', (event) => {
   if (event.duration < 250) return;
 
   const request = requestTimingContext.getStore();
+  const operation = event.query.match(/^\s*(SELECT|INSERT|UPDATE|DELETE)\b/i)?.[1]?.toUpperCase();
+  const table = event.query.match(/\b(?:FROM|JOIN|UPDATE|INTO)\s+(?:"[^"]+"\.)?"?([A-Za-z_][A-Za-z0-9_]*)"?/i)?.[1];
   console.warn(JSON.stringify({
     type: 'slow_db_query',
     method: request?.method,
     path: request?.path,
+    operation,
+    table,
     durationMs: event.duration,
   }));
 });

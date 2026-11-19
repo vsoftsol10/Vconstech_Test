@@ -9,13 +9,33 @@ const accountStatusCache = new Map();
 
 const getCachedAccountStatus = async (cacheKey, loader) => {
   const cached = accountStatusCache.get(cacheKey);
-  if (cached && Date.now() - cached.createdAt < ACCOUNT_STATUS_CACHE_TTL_MS) {
-    return cached.value;
+  if (cached && (cached.promise || Date.now() - cached.createdAt < ACCOUNT_STATUS_CACHE_TTL_MS)) {
+    return cached.promise || cached.value;
   }
 
-  const value = await loader();
-  accountStatusCache.set(cacheKey, { value, createdAt: Date.now() });
-  return value;
+  const entry = {
+    value: undefined,
+    promise: null,
+    createdAt: Date.now(),
+  };
+
+  entry.promise = Promise.resolve()
+    .then(loader)
+    .then((value) => {
+      entry.value = value;
+      entry.promise = null;
+      entry.createdAt = Date.now();
+      return value;
+    })
+    .catch((error) => {
+      if (accountStatusCache.get(cacheKey) === entry) {
+        accountStatusCache.delete(cacheKey);
+      }
+      throw error;
+    });
+
+  accountStatusCache.set(cacheKey, entry);
+  return entry.promise;
 };
 
 const isCustomerAccountInactive = (user) => {

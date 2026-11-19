@@ -23,11 +23,6 @@ export const getEmployees = async (req, res) => {
   try {
     const companyId = req.user.companyId;
 
-    console.log('==================');
-    console.log('Logged in user:', req.user);
-    console.log('Looking for companyId:', companyId);
-    console.log('==================');
-
     const employees = await prisma.engineer.findMany({
       where: {
         companyId
@@ -45,9 +40,6 @@ export const getEmployees = async (req, res) => {
         name: 'asc'
       }
     });
-
-    console.log('Found engineers:', employees.length);
-    console.log('Engineers data:', employees);
 
     res.json({
       count: employees.length,
@@ -127,9 +119,6 @@ export const getUserProfile = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    console.log('🔍 Getting profile for userId:', userId);
-    console.log('🔍 Request user:', req.user);
-
     if (req.user.userId !== userId && req.user.role !== 'Admin') {
       return res.status(403).json({
         success: false,
@@ -171,8 +160,6 @@ export const getUserProfile = async (req, res) => {
         }
       }
     });
-
-    console.log('✅ User found:', user);
 
     if (!user) {
       return res.status(404).json({

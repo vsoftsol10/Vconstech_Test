@@ -57,12 +57,6 @@ export const getNotifications = async (req, res) => {
   try {
     const { userId, userRole, companyId } = getRequestUser(req);
 
-    console.log('getNotifications called');
-    console.log('   Raw user from token:', req.user);
-    console.log('   Resolved userId:', userId);
-    console.log('   Role:', userRole);
-    console.log('   Company:', companyId);
-
     if (!userId) {
       return res.status(400).json({
         success: false,
@@ -82,8 +76,6 @@ export const getNotifications = async (req, res) => {
       console.warn('Unable to scope notifications:', { userRole, companyId });
       return res.json(emptyNotificationResponse());
     }
-
-    console.log('   Prisma where clause:', where);
 
     const unreadWhere = buildNotificationWhere({
       userId,
@@ -124,8 +116,6 @@ export const getNotifications = async (req, res) => {
         return 0;
       })
     ]);
-
-    console.log(`   Found ${notifications.length} notifications, ${unreadCount} unread`);
 
     res.json({
       success: true,
