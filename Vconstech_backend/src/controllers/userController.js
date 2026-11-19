@@ -165,7 +165,8 @@ export const getUserProfile = async (req, res) => {
         company: {
           select: {
             id: true,
-            name: true
+            name: true,
+            logo: true
           }
         }
       }
@@ -205,25 +206,6 @@ export const getUserProfile = async (req, res) => {
       user.subscriptionStartedAt = subscriptionStartedAt;
       user.subscriptionStatus = 'SUBSCRIPTION_ACTIVE';
       user.trialEndDate = trialEndDate;
-    }
-
-    // Fetch company separately with logo
-    if (user.companyId) {
-      const company = await prisma.company.findUnique({
-        where: { id: user.companyId }
-      });
-
-      console.log('✅ Company found:', company);
-
-      // Merge company data when available, but do not fail the profile load
-      // if the company row has not been created yet or was removed.
-      if (company) {
-        user.company = {
-          id: company.id,
-          name: company.name,
-          logo: company.logo
-        };
-      }
     }
 
     res.json({

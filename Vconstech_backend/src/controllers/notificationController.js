@@ -85,30 +85,6 @@ export const getNotifications = async (req, res) => {
 
     console.log('   Prisma where clause:', where);
 
-    const notifications = await prisma.notification.findMany({
-      where,
-      orderBy: { date: 'desc' },
-      take: notificationPanelLimit,
-      include: {
-        engineer: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        project: {
-          select: {
-            id: true,
-            name: true,
-            projectId: true
-          }
-        }
-      }
-    }).catch((err) => {
-      console.error('Prisma notification query error:', err);
-      return [];
-    });
-
     const unreadWhere = buildNotificationWhere({
       userId,
       userRole,
@@ -116,12 +92,38 @@ export const getNotifications = async (req, res) => {
       read: false
     });
 
-    const unreadCount = await prisma.notification.count({
-      where: unreadWhere
-    }).catch((err) => {
-      console.error('Prisma notification count error:', err);
-      return 0;
-    });
+    // These reads are independent; run them together to avoid serial database round trips.
+    const [notifications, unreadCount] = await Promise.all([
+      prisma.notification.findMany({
+        where,
+        orderBy: { date: 'desc' },
+        take: notificationPanelLimit,
+        include: {
+          engineer: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          project: {
+            select: {
+              id: true,
+              name: true,
+              projectId: true
+            }
+          }
+        }
+      }).catch((err) => {
+        console.error('Prisma notification query error:', err);
+        return [];
+      }),
+      prisma.notification.count({
+        where: unreadWhere
+      }).catch((err) => {
+        console.error('Prisma notification count error:', err);
+        return 0;
+      })
+    ]);
 
     console.log(`   Found ${notifications.length} notifications, ${unreadCount} unread`);
 
