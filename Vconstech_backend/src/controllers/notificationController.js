@@ -90,20 +90,11 @@ export const getNotifications = async (req, res) => {
         where,
         orderBy: { date: 'desc' },
         take: notificationPanelLimit,
-        include: {
-          engineer: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
-          project: {
-            select: {
-              id: true,
-              name: true,
-              projectId: true
-            }
-          }
+        select: {
+          id: true,
+          message: true,
+          date: true,
+          read: true
         }
       }).catch((err) => {
         console.error('Prisma notification query error:', err);
